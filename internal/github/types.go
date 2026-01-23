@@ -1,0 +1,96 @@
+package github
+
+import "time"
+
+// Comment represents a comment on an issue, PR, or discussion.
+type Comment struct {
+	ID        string    `json:"id"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Issue represents a GitHub issue with all metadata.
+type Issue struct {
+	ID        string    `json:"id"`
+	URL       string    `json:"url"`
+	Number    int       `json:"number"`
+	Owner     string    `json:"owner"`
+	Repo      string    `json:"repo"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	State     string    `json:"state"`
+	Labels    []string  `json:"labels"`
+	Assignees []string  `json:"assignees"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Comments  []Comment `json:"comments"`
+}
+
+// PullRequest represents a GitHub pull request with all metadata.
+type PullRequest struct {
+	ID          string    `json:"id"`
+	URL         string    `json:"url"`
+	Number      int       `json:"number"`
+	Owner       string    `json:"owner"`
+	Repo        string    `json:"repo"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	State       string    `json:"state"`
+	Draft       bool      `json:"draft"`
+	Labels      []string  `json:"labels"`
+	Assignees   []string  `json:"assignees"`
+	HeadRef     string    `json:"headRef"`
+	BaseRef     string    `json:"baseRef"`
+	MergeCommit string    `json:"mergeCommit,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	MergedAt    time.Time `json:"mergedAt,omitempty"`
+	Comments    []Comment `json:"comments"`
+}
+
+// DiscussionComment represents a comment or reply in a discussion.
+type DiscussionComment struct {
+	ID        string              `json:"id"`
+	Author    string              `json:"author"`
+	Body      string              `json:"body"`
+	CreatedAt time.Time           `json:"createdAt"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+	Replies   []DiscussionComment `json:"replies,omitempty"`
+}
+
+// Discussion represents a GitHub discussion with all metadata.
+type Discussion struct {
+	ID        string              `json:"id"`
+	URL       string              `json:"url"`
+	Number    int                 `json:"number"`
+	Owner     string              `json:"owner"`
+	Repo      string              `json:"repo"`
+	Title     string              `json:"title"`
+	Body      string              `json:"body"`
+	Category  string              `json:"category"`
+	Author    string              `json:"author"`
+	AnswerID  string              `json:"answerId,omitempty"`
+	Locked    bool                `json:"locked"`
+	CreatedAt time.Time           `json:"createdAt"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+	Comments  []DiscussionComment `json:"comments"`
+}
+
+// ItemType represents the type of GitHub item.
+type ItemType string
+
+const (
+	ItemTypeIssue       ItemType = "issue"
+	ItemTypePullRequest ItemType = "pull"
+	ItemTypeDiscussion  ItemType = "discussion"
+)
+
+// ParsedInput represents parsed command input (URL or owner/repo).
+type ParsedInput struct {
+	Owner    string
+	Repo     string
+	Number   int      // 0 if fetching all
+	ItemType ItemType // Empty if fetching all types
+}
