@@ -26,12 +26,12 @@ func NewClient() (*Client, error) {
 
 // URL patterns for GitHub resources.
 var (
-	// Matches: https://github.com/owner/repo/issues/123
-	issueURLPattern = regexp.MustCompile(`^https?://github\.com/([^/]+)/([^/]+)/issues/(\d+)/?$`)
-	// Matches: https://github.com/owner/repo/pull/123
-	pullURLPattern = regexp.MustCompile(`^https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)/?$`)
-	// Matches: https://github.com/owner/repo/discussions/123
-	discussionURLPattern = regexp.MustCompile(`^https?://github\.com/([^/]+)/([^/]+)/discussions/(\d+)/?$`)
+	// Matches: https://github.com/owner/repo/issues/123 or owner/repo/issues/123
+	issueURLPattern = regexp.MustCompile(`^(?:https?://github\.com/)?([^/]+)/([^/]+)/issues/(\d+)/?$`)
+	// Matches: https://github.com/owner/repo/pull/123 or owner/repo/pull/123
+	pullURLPattern = regexp.MustCompile(`^(?:https?://github\.com/)?([^/]+)/([^/]+)/pull/(\d+)/?$`)
+	// Matches: https://github.com/owner/repo/discussions/123 or owner/repo/discussions/123
+	discussionURLPattern = regexp.MustCompile(`^(?:https?://github\.com/)?([^/]+)/([^/]+)/discussions/(\d+)/?$`)
 	// Matches: owner/repo
 	ownerRepoPattern = regexp.MustCompile(`^([^/]+)/([^/]+)$`)
 )

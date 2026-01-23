@@ -89,20 +89,22 @@ func IssueToMarkdown(issue *github.Issue) (string, error) {
 	sb.WriteString("---\n")
 	sb.Write(fmBytes)
 	sb.WriteString("---\n\n")
+	sb.WriteString("<!-- gh-md:content -->\n")
 	sb.WriteString("# ")
 	sb.WriteString(issue.Title)
 	sb.WriteString("\n\n")
 	sb.WriteString(issue.Body)
-	sb.WriteString("\n")
+	sb.WriteString("\n<!-- /gh-md:content -->\n")
 
 	if len(issue.Comments) > 0 {
 		sb.WriteString("\n---\n\n")
-		sb.WriteString("<!-- gh-md:comments -->\n\n")
-
 		for _, c := range issue.Comments {
 			writeComment(&sb, c)
 		}
 	}
+
+	// Marker for new comments
+	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
 
 	return sb.String(), nil
 }
@@ -141,20 +143,30 @@ func PullRequestToMarkdown(pr *github.PullRequest) (string, error) {
 	sb.WriteString("---\n")
 	sb.Write(fmBytes)
 	sb.WriteString("---\n\n")
+	sb.WriteString("<!-- gh-md:content -->\n")
 	sb.WriteString("# ")
 	sb.WriteString(pr.Title)
 	sb.WriteString("\n\n")
 	sb.WriteString(pr.Body)
-	sb.WriteString("\n")
+	sb.WriteString("\n<!-- /gh-md:content -->\n")
 
 	if len(pr.Comments) > 0 {
 		sb.WriteString("\n---\n\n")
-		sb.WriteString("<!-- gh-md:comments -->\n\n")
-
 		for _, c := range pr.Comments {
 			writeComment(&sb, c)
 		}
 	}
+
+	// Review threads (inline code review conversations)
+	if len(pr.ReviewThreads) > 0 {
+		sb.WriteString("\n## Review Threads\n\n")
+		for _, thread := range pr.ReviewThreads {
+			writeReviewThread(&sb, thread)
+		}
+	}
+
+	// Marker for new comments
+	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
 
 	return sb.String(), nil
 }
@@ -186,65 +198,95 @@ func DiscussionToMarkdown(d *github.Discussion) (string, error) {
 	sb.WriteString("---\n")
 	sb.Write(fmBytes)
 	sb.WriteString("---\n\n")
+	sb.WriteString("<!-- gh-md:content -->\n")
 	sb.WriteString("# ")
 	sb.WriteString(d.Title)
 	sb.WriteString("\n\n")
 	sb.WriteString(d.Body)
-	sb.WriteString("\n")
+	sb.WriteString("\n<!-- /gh-md:content -->\n")
 
 	if len(d.Comments) > 0 {
 		sb.WriteString("\n---\n\n")
-		sb.WriteString("<!-- gh-md:comments -->\n\n")
-
 		for _, c := range d.Comments {
-			writeDiscussionComment(&sb, c, 0)
+			writeDiscussionComment(&sb, c, "")
 		}
 	}
+
+	// Marker for new comments
+	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
 
 	return sb.String(), nil
 }
 
 func writeComment(sb *strings.Builder, c github.Comment) {
-	sb.WriteString("<!-- gh-md:comment-meta\n")
+	sb.WriteString("<!-- gh-md:comment\n")
 	fmt.Fprintf(sb, "id: %s\n", c.ID)
 	fmt.Fprintf(sb, "author: %s\n", c.Author)
 	fmt.Fprintf(sb, "created: %s\n", c.CreatedAt.Format(time.RFC3339))
-	sb.WriteString("-->\n\n")
+	sb.WriteString("-->\n")
 	fmt.Fprintf(sb, "### @%s (%s)\n\n", c.Author, c.CreatedAt.Format("2006-01-02"))
 	sb.WriteString(c.Body)
-	sb.WriteString("\n\n")
+	sb.WriteString("\n<!-- /gh-md:comment -->\n\n")
 }
 
-func writeDiscussionComment(sb *strings.Builder, c github.DiscussionComment, depth int) {
-	indent := strings.Repeat("  ", depth)
+func writeReviewThread(sb *strings.Builder, thread github.ReviewThread) {
+	// Thread header
+	resolved := ""
+	if thread.IsResolved {
+		resolved = " (resolved)"
+	}
+	outdated := ""
+	if thread.IsOutdated {
+		outdated = " (outdated)"
+	}
+	sb.WriteString("<!-- gh-md:review-thread\n")
+	fmt.Fprintf(sb, "id: %s\n", thread.ID)
+	fmt.Fprintf(sb, "path: %s\n", thread.Path)
+	fmt.Fprintf(sb, "line: %d\n", thread.Line)
+	sb.WriteString("-->\n")
+	fmt.Fprintf(sb, "### `%s:%d`%s%s\n\n", thread.Path, thread.Line, resolved, outdated)
 
-	sb.WriteString(indent)
-	sb.WriteString("<!-- gh-md:comment-meta\n")
-	sb.WriteString(indent)
+	// Write each comment in the thread
+	for _, c := range thread.Comments {
+		sb.WriteString("<!-- gh-md:review-comment\n")
+		fmt.Fprintf(sb, "id: %s\n", c.ID)
+		fmt.Fprintf(sb, "author: %s\n", c.Author)
+		fmt.Fprintf(sb, "created: %s\n", c.CreatedAt.Format(time.RFC3339))
+		sb.WriteString("-->\n")
+		fmt.Fprintf(sb, "#### @%s (%s)\n\n", c.Author, c.CreatedAt.Format("2006-01-02"))
+		sb.WriteString(c.Body)
+		sb.WriteString("\n<!-- /gh-md:review-comment -->\n\n")
+	}
+
+	// Reply marker for this thread
+	fmt.Fprintf(sb, "<!-- gh-md:new-comment reply_to: %s -->\n\n<!-- /gh-md:new-comment -->\n\n", thread.ID)
+
+	sb.WriteString("<!-- /gh-md:review-thread -->\n\n")
+}
+
+func writeDiscussionComment(sb *strings.Builder, c github.DiscussionComment, parentID string) {
+	sb.WriteString("<!-- gh-md:comment\n")
 	fmt.Fprintf(sb, "id: %s\n", c.ID)
-	sb.WriteString(indent)
 	fmt.Fprintf(sb, "author: %s\n", c.Author)
-	sb.WriteString(indent)
+	if parentID != "" {
+		fmt.Fprintf(sb, "parent: %s\n", parentID)
+	}
 	fmt.Fprintf(sb, "created: %s\n", c.CreatedAt.Format(time.RFC3339))
-	sb.WriteString(indent)
-	sb.WriteString("-->\n\n")
+	sb.WriteString("-->\n")
 
 	heading := "###"
-	if depth > 0 {
+	if parentID != "" {
 		heading = "####"
 	}
-	sb.WriteString(indent)
 	fmt.Fprintf(sb, "%s @%s (%s)\n\n", heading, c.Author, c.CreatedAt.Format("2006-01-02"))
 
-	// Indent body lines
-	for _, line := range strings.Split(c.Body, "\n") {
-		sb.WriteString(indent)
-		sb.WriteString(line)
-		sb.WriteString("\n")
-	}
-	sb.WriteString("\n")
+	sb.WriteString(c.Body)
+	sb.WriteString("\n<!-- /gh-md:comment -->\n\n")
+
+	// Add new reply marker for this comment
+	fmt.Fprintf(sb, "<!-- gh-md:new-comment reply_to: %s -->\n\n<!-- /gh-md:new-comment -->\n\n", c.ID)
 
 	for _, reply := range c.Replies {
-		writeDiscussionComment(sb, reply, depth+1)
+		writeDiscussionComment(sb, reply, c.ID)
 	}
 }

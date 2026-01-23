@@ -11,6 +11,25 @@ type Comment struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// ReviewThread represents a review thread on a PR (a conversation on a specific line).
+type ReviewThread struct {
+	ID         string          `json:"id"`
+	Path       string          `json:"path"`
+	Line       int             `json:"line"`
+	IsResolved bool            `json:"isResolved"`
+	IsOutdated bool            `json:"isOutdated"`
+	Comments   []ReviewComment `json:"comments"`
+}
+
+// ReviewComment represents an inline review comment on a PR.
+type ReviewComment struct {
+	ID        string    `json:"id"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // Issue represents a GitHub issue with all metadata.
 type Issue struct {
 	ID        string    `json:"id"`
@@ -30,24 +49,25 @@ type Issue struct {
 
 // PullRequest represents a GitHub pull request with all metadata.
 type PullRequest struct {
-	ID          string    `json:"id"`
-	URL         string    `json:"url"`
-	Number      int       `json:"number"`
-	Owner       string    `json:"owner"`
-	Repo        string    `json:"repo"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	State       string    `json:"state"`
-	Draft       bool      `json:"draft"`
-	Labels      []string  `json:"labels"`
-	Assignees   []string  `json:"assignees"`
-	HeadRef     string    `json:"headRef"`
-	BaseRef     string    `json:"baseRef"`
-	MergeCommit string    `json:"mergeCommit,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	MergedAt    time.Time `json:"mergedAt,omitempty"`
-	Comments    []Comment `json:"comments"`
+	ID            string         `json:"id"`
+	URL           string         `json:"url"`
+	Number        int            `json:"number"`
+	Owner         string         `json:"owner"`
+	Repo          string         `json:"repo"`
+	Title         string         `json:"title"`
+	Body          string         `json:"body"`
+	State         string         `json:"state"`
+	Draft         bool           `json:"draft"`
+	Labels        []string       `json:"labels"`
+	Assignees     []string       `json:"assignees"`
+	HeadRef       string         `json:"headRef"`
+	BaseRef       string         `json:"baseRef"`
+	MergeCommit   string         `json:"mergeCommit,omitempty"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
+	MergedAt      time.Time      `json:"mergedAt,omitempty"`
+	Comments      []Comment      `json:"comments"`
+	ReviewThreads []ReviewThread `json:"reviewThreads"`
 }
 
 // DiscussionComment represents a comment or reply in a discussion.

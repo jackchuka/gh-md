@@ -50,6 +50,26 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [P
             }
           }
         }
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            path
+            line
+            isResolved
+            isOutdated
+            comments(first: 100) {
+              nodes {
+                id
+                body
+                createdAt
+                updatedAt
+                author {
+                  login
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -93,6 +113,26 @@ query($owner: String!, $repo: String!, $number: Int!) {
           updatedAt
           author {
             login
+          }
+        }
+      }
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          path
+          line
+          isResolved
+          isOutdated
+          comments(first: 100) {
+            nodes {
+              id
+              body
+              createdAt
+              updatedAt
+              author {
+                login
+              }
+            }
           }
         }
       }
@@ -159,6 +199,26 @@ type PullRequestNode struct {
 			} `json:"author"`
 		} `json:"nodes"`
 	} `json:"comments"`
+	ReviewThreads struct {
+		Nodes []struct {
+			ID         string `json:"id"`
+			Path       string `json:"path"`
+			Line       int    `json:"line"`
+			IsResolved bool   `json:"isResolved"`
+			IsOutdated bool   `json:"isOutdated"`
+			Comments   struct {
+				Nodes []struct {
+					ID        string    `json:"id"`
+					Body      string    `json:"body"`
+					CreatedAt time.Time `json:"createdAt"`
+					UpdatedAt time.Time `json:"updatedAt"`
+					Author    struct {
+						Login string `json:"login"`
+					} `json:"author"`
+				} `json:"nodes"`
+			} `json:"comments"`
+		} `json:"nodes"`
+	} `json:"reviewThreads"`
 }
 
 // FetchPullRequest fetches a single PR by number.
@@ -240,24 +300,48 @@ func nodeToPullRequest(node PullRequestNode, owner, repo string) *PullRequest {
 		})
 	}
 
+	// Extract review threads
+	var reviewThreads []ReviewThread
+	for _, thread := range node.ReviewThreads.Nodes {
+		var threadComments []ReviewComment
+		for _, c := range thread.Comments.Nodes {
+			threadComments = append(threadComments, ReviewComment{
+				ID:        c.ID,
+				Author:    c.Author.Login,
+				Body:      c.Body,
+				CreatedAt: c.CreatedAt,
+				UpdatedAt: c.UpdatedAt,
+			})
+		}
+		reviewThreads = append(reviewThreads, ReviewThread{
+			ID:         thread.ID,
+			Path:       thread.Path,
+			Line:       thread.Line,
+			IsResolved: thread.IsResolved,
+			IsOutdated: thread.IsOutdated,
+			Comments:   threadComments,
+		})
+	}
+
 	return &PullRequest{
-		ID:          node.ID,
-		URL:         node.URL,
-		Number:      node.Number,
-		Owner:       owner,
-		Repo:        repo,
-		Title:       node.Title,
-		Body:        node.Body,
-		State:       strings.ToLower(node.State),
-		Draft:       node.IsDraft,
-		Labels:      labels,
-		Assignees:   assignees,
-		HeadRef:     node.HeadRefName,
-		BaseRef:     node.BaseRefName,
-		MergeCommit: node.MergeCommit.Oid,
-		CreatedAt:   node.CreatedAt,
-		UpdatedAt:   node.UpdatedAt,
-		MergedAt:    node.MergedAt,
-		Comments:    comments,
+		ID:            node.ID,
+		URL:           node.URL,
+		Number:        node.Number,
+		Owner:         owner,
+		Repo:          repo,
+		Title:         node.Title,
+		Body:          node.Body,
+		State:         strings.ToLower(node.State),
+		Draft:         node.IsDraft,
+		Labels:        labels,
+		Assignees:     assignees,
+		HeadRef:       node.HeadRefName,
+		BaseRef:       node.BaseRefName,
+		MergeCommit:   node.MergeCommit.Oid,
+		CreatedAt:     node.CreatedAt,
+		UpdatedAt:     node.UpdatedAt,
+		MergedAt:      node.MergedAt,
+		Comments:      comments,
+		ReviewThreads: reviewThreads,
 	}
 }
