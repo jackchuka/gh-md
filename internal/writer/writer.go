@@ -9,21 +9,41 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// IssueReferenceFrontmatter represents a reference to a parent or child issue in frontmatter.
+type IssueReferenceFrontmatter struct {
+	Number int    `yaml:"number"`
+	Title  string `yaml:"title"`
+	URL    string `yaml:"url"`
+	State  string `yaml:"state"`
+	Owner  string `yaml:"owner,omitempty"` // Only if cross-repo
+	Repo   string `yaml:"repo,omitempty"`  // Only if cross-repo
+}
+
+// SubIssuesSummaryFrontmatter provides statistics about sub-issues in frontmatter.
+type SubIssuesSummaryFrontmatter struct {
+	Total           int `yaml:"total"`
+	Completed       int `yaml:"completed"`
+	PercentComplete int `yaml:"percent_complete"`
+}
+
 // IssueFrontmatter represents the YAML frontmatter for an issue.
 type IssueFrontmatter struct {
-	ID         string    `yaml:"id"`
-	URL        string    `yaml:"url"`
-	Number     int       `yaml:"number"`
-	Owner      string    `yaml:"owner"`
-	Repo       string    `yaml:"repo"`
-	Title      string    `yaml:"title"`
-	State      string    `yaml:"state"`
-	Author     string    `yaml:"author,omitempty"`
-	Labels     []string  `yaml:"labels,omitempty"`
-	Assignees  []string  `yaml:"assignees,omitempty"`
-	Created    time.Time `yaml:"created"`
-	Updated    time.Time `yaml:"updated"`
-	LastPulled time.Time `yaml:"last_pulled"`
+	ID               string                       `yaml:"id"`
+	URL              string                       `yaml:"url"`
+	Number           int                          `yaml:"number"`
+	Owner            string                       `yaml:"owner"`
+	Repo             string                       `yaml:"repo"`
+	Title            string                       `yaml:"title"`
+	State            string                       `yaml:"state"`
+	Author           string                       `yaml:"author,omitempty"`
+	Labels           []string                     `yaml:"labels,omitempty"`
+	Assignees        []string                     `yaml:"assignees,omitempty"`
+	Created          time.Time                    `yaml:"created"`
+	Updated          time.Time                    `yaml:"updated"`
+	LastPulled       time.Time                    `yaml:"last_pulled"`
+	Parent           *IssueReferenceFrontmatter   `yaml:"parent,omitempty"`
+	Children         []IssueReferenceFrontmatter  `yaml:"children,omitempty"`
+	SubIssuesSummary *SubIssuesSummaryFrontmatter `yaml:"sub_issues_summary,omitempty"`
 }
 
 // PullRequestFrontmatter represents the YAML frontmatter for a PR.
@@ -81,6 +101,49 @@ func IssueToMarkdown(issue *github.Issue) (string, error) {
 		Created:    issue.CreatedAt,
 		Updated:    issue.UpdatedAt,
 		LastPulled: time.Now().UTC(),
+	}
+
+	// Convert parent issue reference
+	if issue.Parent != nil {
+		fm.Parent = &IssueReferenceFrontmatter{
+			Number: issue.Parent.Number,
+			Title:  issue.Parent.Title,
+			URL:    issue.Parent.URL,
+			State:  issue.Parent.State,
+		}
+		// Only include owner/repo if cross-repo
+		if issue.Parent.Owner != issue.Owner || issue.Parent.Repo != issue.Repo {
+			fm.Parent.Owner = issue.Parent.Owner
+			fm.Parent.Repo = issue.Parent.Repo
+		}
+	}
+
+	// Convert children (sub-issues)
+	if len(issue.Children) > 0 {
+		fm.Children = make([]IssueReferenceFrontmatter, 0, len(issue.Children))
+		for _, child := range issue.Children {
+			childFm := IssueReferenceFrontmatter{
+				Number: child.Number,
+				Title:  child.Title,
+				URL:    child.URL,
+				State:  child.State,
+			}
+			// Only include owner/repo if cross-repo
+			if child.Owner != issue.Owner || child.Repo != issue.Repo {
+				childFm.Owner = child.Owner
+				childFm.Repo = child.Repo
+			}
+			fm.Children = append(fm.Children, childFm)
+		}
+	}
+
+	// Convert sub-issues summary
+	if issue.SubIssuesSummary != nil {
+		fm.SubIssuesSummary = &SubIssuesSummaryFrontmatter{
+			Total:           issue.SubIssuesSummary.Total,
+			Completed:       issue.SubIssuesSummary.Completed,
+			PercentComplete: issue.SubIssuesSummary.PercentComplete,
+		}
 	}
 
 	fmBytes, err := yaml.Marshal(fm)

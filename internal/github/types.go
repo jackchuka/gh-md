@@ -30,22 +30,43 @@ type ReviewComment struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// IssueReference represents a reference to a parent or child issue.
+type IssueReference struct {
+	ID     string `json:"id"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+	State  string `json:"state"`
+	Owner  string `json:"owner"`
+	Repo   string `json:"repo"`
+}
+
+// SubIssuesSummary provides statistics about sub-issues.
+type SubIssuesSummary struct {
+	Total           int `json:"total"`
+	Completed       int `json:"completed"`
+	PercentComplete int `json:"percentComplete"`
+}
+
 // Issue represents a GitHub issue with all metadata.
 type Issue struct {
-	ID        string    `json:"id"`
-	URL       string    `json:"url"`
-	Number    int       `json:"number"`
-	Owner     string    `json:"owner"`
-	Repo      string    `json:"repo"`
-	Title     string    `json:"title"`
-	Body      string    `json:"body"`
-	State     string    `json:"state"`
-	Author    string    `json:"author"`
-	Labels    []string  `json:"labels"`
-	Assignees []string  `json:"assignees"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Comments  []Comment `json:"comments"`
+	ID               string            `json:"id"`
+	URL              string            `json:"url"`
+	Number           int               `json:"number"`
+	Owner            string            `json:"owner"`
+	Repo             string            `json:"repo"`
+	Title            string            `json:"title"`
+	Body             string            `json:"body"`
+	State            string            `json:"state"`
+	Author           string            `json:"author"`
+	Labels           []string          `json:"labels"`
+	Assignees        []string          `json:"assignees"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	Comments         []Comment         `json:"comments"`
+	Parent           *IssueReference   `json:"parent,omitempty"`
+	Children         []IssueReference  `json:"children,omitempty"`
+	SubIssuesSummary *SubIssuesSummary `json:"subIssuesSummary,omitempty"`
 }
 
 // PullRequest represents a GitHub pull request with all metadata.
