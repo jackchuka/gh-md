@@ -52,13 +52,13 @@ Push local markdown changes back to GitHub.
 
 ```bash
 # Push changes from a local file
-gh md push owner/repos/repo/issues/123.md
+gh md push owner/repo/issues/123.md
 
 # Preview changes without pushing
-gh md push --dry-run owner/repos/repo/issues/123.md
+gh md push --dry-run owner/repo/issues/123.md
 
 # Force push even if remote has newer changes
-gh md push --force owner/repos/repo/issues/123.md
+gh md push --force owner/repo/issues/123.md
 ```
 
 **What you can push:**
@@ -124,14 +124,13 @@ Files are stored in `~/.gh-md/` by default:
 ```
 ~/.gh-md/
   owner/
-    repos/
-      repo/
-        issues/
-          123.md
-        pulls/
-          456.md
-        discussions/
-          789.md
+    repo/
+      issues/
+        123.md
+      pulls/
+        456.md
+      discussions/
+        789.md
 ```
 
 Override with the `GH_MD_ROOT` environment variable:

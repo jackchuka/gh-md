@@ -164,7 +164,8 @@ func detectItemType(path string) github.ItemType {
 // Supports:
 //   - Full URL: https://github.com/owner/repo/issues/123
 //   - Short path: owner/repo/issues/123
-//   - Local file: ~/.gh-md/owner/repos/repo/issues/123.md
+//   - Root-relative path: owner/repo/issues/123.md
+//   - Local file: ~/.gh-md/owner/repo/issues/123.md
 func ResolveFilePath(input string) (string, error) {
 	// Check if it's a URL or short path format
 	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
@@ -176,12 +177,17 @@ func ResolveFilePath(input string) (string, error) {
 		return path, nil
 	}
 
-	// It's a file path - check if it exists
-	if _, err := os.Stat(input); err != nil {
-		return "", fmt.Errorf("file not found: %s", input)
+	// It's a file path - check if it exists as-is first
+	if _, err := os.Stat(input); err == nil {
+		return input, nil
 	}
 
-	return input, nil
+	// Try interpreting it as a path relative to GH_MD_ROOT (~/.gh-md by default).
+	if path, err := resolveRootRelativePath(input); err == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("file not found: %s", input)
 }
 
 var (
@@ -215,17 +221,50 @@ func resolveShortPath(input string) (string, error) {
 		return "", err
 	}
 
-	path := filepath.Join(root, owner, "repos", repo, itemDir, number+".md")
-
-	if _, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("local file not found: %s (run 'gh md pull' first)", path)
+	filePath := filepath.Join(root, owner, repo, itemDir, number+".md")
+	if _, err := os.Stat(filePath); err == nil {
+		return filePath, nil
 	}
 
-	return path, nil
+	return "", fmt.Errorf(
+		"local file not found (run 'gh md pull' first): %s ",
+		filePath,
+	)
 }
 
 func resolveURLToPath(url string) (string, error) {
 	return resolveShortPath(url)
+}
+
+func resolveRootRelativePath(input string) (string, error) {
+	if input == "" {
+		return "", fmt.Errorf("empty path")
+	}
+
+	// Only try this for relative paths to avoid surprises.
+	if filepath.IsAbs(input) {
+		return "", fmt.Errorf("absolute path")
+	}
+
+	root, err := getRoot()
+	if err != nil {
+		return "", err
+	}
+
+	candidates := []string{
+		filepath.Join(root, input),
+	}
+	if !strings.HasSuffix(input, ".md") {
+		candidates = append(candidates, filepath.Join(root, input+".md"))
+	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("local file not found under root: %s", root)
 }
 
 func getRoot() (string, error) {
