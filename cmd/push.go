@@ -29,7 +29,7 @@ Supports pushing:
   - Edited comments
 
 Examples:
-  gh md push ~/.gh-md/owner/repos/repo/issues/123.md
+  gh md push ~/.gh-md/owner/repo/issues/123.md
   gh md push https://github.com/owner/repo/issues/123
   gh md push --dry-run <file>`,
 	Args: cobra.ExactArgs(1),

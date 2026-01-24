@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -486,9 +488,9 @@ func TestDetectItemType(t *testing.T) {
 		path     string
 		expected string
 	}{
-		{"owner/repos/repo/issues/1.md", "issue"},
-		{"owner/repos/repo/pulls/1.md", "pull"},
-		{"owner/repos/repo/discussions/1.md", "discussion"},
+		{"owner/repo/issues/1.md", "issue"},
+		{"owner/repo/pulls/1.md", "pull"},
+		{"owner/repo/discussions/1.md", "discussion"},
 		{"some/other/path/1.md", ""},
 	}
 
@@ -562,6 +564,87 @@ my reply to the review thread
 	if reply.Body != "my reply to the review thread" {
 		t.Errorf("expected body 'my reply to the review thread', got %q", reply.Body)
 	}
+}
+
+func TestResolveFilePath(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GH_MD_ROOT", root)
+
+	expected := filepath.Join(root, "owner", "repo", "issues", "123.md")
+	if err := os.MkdirAll(filepath.Dir(expected), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(expected, []byte("test"), 0o644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	t.Run("root-relative path with .md", func(t *testing.T) {
+		got, err := ResolveFilePath("owner/repo/issues/123.md")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != expected {
+			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("root-relative path with .md and dot-slash", func(t *testing.T) {
+		got, err := ResolveFilePath("./owner/repo/issues/123.md")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != expected {
+			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("root-relative path without .md", func(t *testing.T) {
+		got, err := ResolveFilePath("owner/repo/issues/123")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != expected {
+			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("short path", func(t *testing.T) {
+		got, err := ResolveFilePath("owner/repo/issues/123")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != expected {
+			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("url", func(t *testing.T) {
+		got, err := ResolveFilePath("https://github.com/owner/repo/issues/123")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != expected {
+			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("pull path with .md", func(t *testing.T) {
+		pr := filepath.Join(root, "owner", "repo", "pulls", "456.md")
+		if err := os.MkdirAll(filepath.Dir(pr), 0o755); err != nil {
+			t.Fatalf("MkdirAll failed: %v", err)
+		}
+		if err := os.WriteFile(pr, []byte("test"), 0o644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		got, err := ResolveFilePath("owner/repo/pull/456.md")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != pr {
+			t.Fatalf("got %q, want %q", got, pr)
+		}
+	})
 }
 
 func TestParseComments_MultilineBody(t *testing.T) {

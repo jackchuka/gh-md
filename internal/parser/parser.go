@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/jackchuka/gh-md/internal/config"
 	"github.com/jackchuka/gh-md/internal/github"
 	"gopkg.in/yaml.v3"
 )
@@ -164,81 +164,88 @@ func detectItemType(path string) github.ItemType {
 // Supports:
 //   - Full URL: https://github.com/owner/repo/issues/123
 //   - Short path: owner/repo/issues/123
-//   - Local file: ~/.gh-md/owner/repos/repo/issues/123.md
+//   - Root-relative path: owner/repo/issues/123.md
+//   - Local file: ~/.gh-md/owner/repo/issues/123.md
 func ResolveFilePath(input string) (string, error) {
-	// Check if it's a URL or short path format
-	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
-		return resolveURLToPath(input)
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("empty input")
 	}
 
-	// Check if it's a short path format (owner/repo/issues/123)
-	if path, err := resolveShortPath(input); err == nil {
+	// It's a file path - check if it exists as-is first
+	if _, err := os.Stat(input); err == nil {
+		return input, nil
+	}
+
+	// Try interpreting it as a path relative to GH_MD_ROOT (~/.gh-md by default).
+	if path, err := resolveRootRelativePath(input); err == nil {
 		return path, nil
 	}
 
-	// It's a file path - check if it exists
-	if _, err := os.Stat(input); err != nil {
-		return "", fmt.Errorf("file not found: %s", input)
+	parsed, err := github.ParseInput(input)
+	if err == nil && parsed.Number > 0 && parsed.ItemType != "" {
+		itemDir, ok := itemTypeDir(parsed.ItemType)
+		if !ok {
+			return "", fmt.Errorf("unsupported item type: %s", parsed.ItemType)
+		}
+
+		root, err := config.GetRootDir()
+		if err != nil {
+			return "", err
+		}
+
+		expected := filepath.Join(root, parsed.Owner, parsed.Repo, itemDir, fmt.Sprintf("%d.md", parsed.Number))
+		if _, err := os.Stat(expected); err == nil {
+			return expected, nil
+		}
+		return "", fmt.Errorf("local file not found: %s (run 'gh md pull' first)", expected)
 	}
 
-	return input, nil
+	return "", fmt.Errorf("file not found: %s", input)
 }
 
-var (
-	// Matches: https://github.com/owner/repo/issues/123 or owner/repo/issues/123
-	issuePathPattern = regexp.MustCompile(`^(?:https?://github\.com/)?([^/]+)/([^/]+)/issues/(\d+)/?$`)
-	// Matches: https://github.com/owner/repo/pull/123 or owner/repo/pull/123
-	pullPathPattern = regexp.MustCompile(`^(?:https?://github\.com/)?([^/]+)/([^/]+)/pull/(\d+)/?$`)
-	// Matches: https://github.com/owner/repo/discussions/123 or owner/repo/discussions/123
-	discussionPathPattern = regexp.MustCompile(`^(?:https?://github\.com/)?([^/]+)/([^/]+)/discussions/(\d+)/?$`)
-)
-
-func resolveShortPath(input string) (string, error) {
-	var owner, repo, number, itemDir string
-
-	if matches := issuePathPattern.FindStringSubmatch(input); matches != nil {
-		owner, repo, number = matches[1], matches[2], matches[3]
-		itemDir = "issues"
-	} else if matches := pullPathPattern.FindStringSubmatch(input); matches != nil {
-		owner, repo, number = matches[1], matches[2], matches[3]
-		itemDir = "pulls"
-	} else if matches := discussionPathPattern.FindStringSubmatch(input); matches != nil {
-		owner, repo, number = matches[1], matches[2], matches[3]
-		itemDir = "discussions"
-	} else {
-		return "", fmt.Errorf("invalid path format: %s", input)
+func resolveRootRelativePath(input string) (string, error) {
+	if input == "" {
+		return "", fmt.Errorf("empty path")
 	}
 
-	// Build the file path
-	root, err := getRoot()
+	// Only try this for relative paths to avoid surprises.
+	if filepath.IsAbs(input) {
+		return "", fmt.Errorf("absolute path")
+	}
+
+	root, err := config.GetRootDir()
 	if err != nil {
 		return "", err
 	}
 
-	path := filepath.Join(root, owner, "repos", repo, itemDir, number+".md")
-
-	if _, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("local file not found: %s (run 'gh md pull' first)", path)
+	candidates := []string{
+		filepath.Join(root, input),
+	}
+	if !strings.HasSuffix(input, ".md") {
+		candidates = append(candidates, filepath.Join(root, input+".md"))
 	}
 
-	return path, nil
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("local file not found under root: %s", root)
 }
 
-func resolveURLToPath(url string) (string, error) {
-	return resolveShortPath(url)
-}
-
-func getRoot() (string, error) {
-	if root := os.Getenv("GH_MD_ROOT"); root != "" {
-		return root, nil
+func itemTypeDir(itemType github.ItemType) (string, bool) {
+	switch itemType {
+	case github.ItemTypeIssue:
+		return "issues", true
+	case github.ItemTypePullRequest:
+		return "pulls", true
+	case github.ItemTypeDiscussion:
+		return "discussions", true
+	default:
+		return "", false
 	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(home, ".gh-md"), nil
 }
 
 const (

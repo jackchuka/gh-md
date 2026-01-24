@@ -26,14 +26,19 @@ func GetRootDir() (string, error) {
 }
 
 // GetRepoDir returns the directory path for a specific repo.
-// Format: <root>/<owner>/repos/<repo>/
+// Format: <root>/<owner>/<repo>/
 func GetRepoDir(owner, repo string) (string, error) {
 	root, err := GetRootDir()
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(root, owner, "repos", repo), nil
+	dir := filepath.Join(root, owner, repo)
+	if isDir(dir) {
+		return dir, nil
+	}
+
+	return dir, nil
 }
 
 // GetIssuesDir returns the issues directory for a repo.
@@ -64,4 +69,12 @@ func GetDiscussionsDir(owner, repo string) (string, error) {
 	}
 
 	return filepath.Join(repoDir, "discussions"), nil
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }

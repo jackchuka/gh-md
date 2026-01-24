@@ -18,14 +18,15 @@ var (
 )
 
 var pullCmd = &cobra.Command{
-	Use:   "pull <owner/repo | url>",
+	Use:   "pull <owner/repo | url | owner/repo/<type>/<number>>",
 	Short: "Pull GitHub data to local markdown files",
 	Long: `Pull issues, PRs, and discussions from GitHub and save them as local markdown files.
 
 Examples:
   gh md pull owner/repo
   gh md pull owner/repo --issues --limit 10
-  gh md pull https://github.com/owner/repo/issues/123`,
+  gh md pull https://github.com/owner/repo/issues/123
+  gh md pull owner/repo/issues/123.md`,
 	Args: cobra.ExactArgs(1),
 	RunE: runPull,
 }
