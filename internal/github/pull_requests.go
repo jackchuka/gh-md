@@ -20,6 +20,9 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [P
         title
         body
         state
+        author {
+          login
+        }
         isDraft
         createdAt
         updatedAt
@@ -86,6 +89,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
       title
       body
       state
+      author {
+        login
+      }
       isDraft
       createdAt
       updatedAt
@@ -163,12 +169,15 @@ type SinglePullRequestResponse struct {
 
 // PullRequestNode represents a PR in the GraphQL response.
 type PullRequestNode struct {
-	ID          string    `json:"id"`
-	URL         string    `json:"url"`
-	Number      int       `json:"number"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	State       string    `json:"state"`
+	ID     string `json:"id"`
+	URL    string `json:"url"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
 	IsDraft     bool      `json:"isDraft"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -332,6 +341,7 @@ func nodeToPullRequest(node PullRequestNode, owner, repo string) *PullRequest {
 		Title:         node.Title,
 		Body:          node.Body,
 		State:         strings.ToLower(node.State),
+		Author:        node.Author.Login,
 		Draft:         node.IsDraft,
 		Labels:        labels,
 		Assignees:     assignees,
