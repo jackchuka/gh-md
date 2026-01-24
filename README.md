@@ -9,6 +9,7 @@ A GitHub CLI extension that syncs GitHub Issues, Pull Requests, and Discussions 
 
 - **Pull** GitHub data as markdown files with YAML frontmatter
 - **Push** local changes back to GitHub (title, body, state, comments)
+- **Search** local files interactively with FZF
 - **Conflict detection** prevents overwriting newer remote changes
 - **AI-friendly** format ideal for use with coding assistants and local tools
 
@@ -67,6 +68,40 @@ gh md push --force owner/repo/issues/123.md
 - State changes (open/closed)
 - New comments
 - Edited comments
+
+### Search
+
+Interactively search local files with [FZF](https://github.com/junegunn/fzf).
+
+```bash
+# Search all local files
+gh md search
+
+# Search with an initial query
+gh md search bug
+
+# Filter by type
+gh md search --issues
+gh md search --prs
+gh md search --discussions
+
+# Filter by repository
+gh md search --repo owner/repo
+
+# Non-interactive list mode
+gh md search --list
+gh md search --list bug
+```
+
+**Actions after selection:**
+
+- Open in `$EDITOR`
+- Push changes to GitHub
+- View in browser
+- Copy file path
+- Pull fresh from GitHub
+
+Requires [FZF](https://github.com/junegunn/fzf) to be installed (`brew install fzf`).
 
 ## File Format
 
