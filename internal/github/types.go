@@ -40,6 +40,7 @@ type Issue struct {
 	Title     string    `json:"title"`
 	Body      string    `json:"body"`
 	State     string    `json:"state"`
+	Author    string    `json:"author"`
 	Labels    []string  `json:"labels"`
 	Assignees []string  `json:"assignees"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -57,6 +58,7 @@ type PullRequest struct {
 	Title         string         `json:"title"`
 	Body          string         `json:"body"`
 	State         string         `json:"state"`
+	Author        string         `json:"author"`
 	Draft         bool           `json:"draft"`
 	Labels        []string       `json:"labels"`
 	Assignees     []string       `json:"assignees"`

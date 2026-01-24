@@ -18,6 +18,7 @@ type IssueFrontmatter struct {
 	Repo       string    `yaml:"repo"`
 	Title      string    `yaml:"title"`
 	State      string    `yaml:"state"`
+	Author     string    `yaml:"author,omitempty"`
 	Labels     []string  `yaml:"labels,omitempty"`
 	Assignees  []string  `yaml:"assignees,omitempty"`
 	Created    time.Time `yaml:"created"`
@@ -34,6 +35,7 @@ type PullRequestFrontmatter struct {
 	Repo        string    `yaml:"repo"`
 	Title       string    `yaml:"title"`
 	State       string    `yaml:"state"`
+	Author      string    `yaml:"author,omitempty"`
 	Draft       bool      `yaml:"draft,omitempty"`
 	Labels      []string  `yaml:"labels,omitempty"`
 	Assignees   []string  `yaml:"assignees,omitempty"`
@@ -73,6 +75,7 @@ func IssueToMarkdown(issue *github.Issue) (string, error) {
 		Repo:       issue.Repo,
 		Title:      issue.Title,
 		State:      issue.State,
+		Author:     issue.Author,
 		Labels:     issue.Labels,
 		Assignees:  issue.Assignees,
 		Created:    issue.CreatedAt,
@@ -119,6 +122,7 @@ func PullRequestToMarkdown(pr *github.PullRequest) (string, error) {
 		Repo:        pr.Repo,
 		Title:       pr.Title,
 		State:       pr.State,
+		Author:      pr.Author,
 		Draft:       pr.Draft,
 		Labels:      pr.Labels,
 		Assignees:   pr.Assignees,

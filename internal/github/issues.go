@@ -20,6 +20,9 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [I
         title
         body
         state
+        author {
+          login
+        }
         createdAt
         updatedAt
         labels(first: 100) {
@@ -59,6 +62,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
       title
       body
       state
+      author {
+        login
+      }
       createdAt
       updatedAt
       labels(first: 100) {
@@ -109,12 +115,15 @@ type SingleIssueResponse struct {
 
 // IssueNode represents an issue in the GraphQL response.
 type IssueNode struct {
-	ID        string    `json:"id"`
-	URL       string    `json:"url"`
-	Number    int       `json:"number"`
-	Title     string    `json:"title"`
-	Body      string    `json:"body"`
-	State     string    `json:"state"`
+	ID     string `json:"id"`
+	URL    string `json:"url"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Labels    struct {
@@ -228,6 +237,7 @@ func nodeToIssue(node IssueNode, owner, repo string) *Issue {
 		Title:     node.Title,
 		Body:      node.Body,
 		State:     strings.ToLower(node.State),
+		Author:    node.Author.Login,
 		Labels:    labels,
 		Assignees: assignees,
 		CreatedAt: node.CreatedAt,
