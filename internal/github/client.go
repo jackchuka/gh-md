@@ -18,7 +18,12 @@ type Client struct {
 
 // NewClient creates a new GitHub client using gh auth.
 func NewClient() (*Client, error) {
-	gql, err := api.DefaultGraphQLClient()
+	opts := api.ClientOptions{
+		Headers: map[string]string{
+			"GraphQL-Features": "sub_issues",
+		},
+	}
+	gql, err := api.NewGraphQLClient(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}

@@ -46,6 +46,35 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [I
             }
           }
         }
+        parent {
+          id
+          number
+          title
+          url
+          state
+          repository {
+            owner { login }
+            name
+          }
+        }
+        subIssues(first: 50) {
+          nodes {
+            id
+            number
+            title
+            url
+            state
+            repository {
+              owner { login }
+              name
+            }
+          }
+        }
+        subIssuesSummary {
+          total
+          completed
+          percentCompleted
+        }
       }
     }
   }
@@ -88,6 +117,35 @@ query($owner: String!, $repo: String!, $number: Int!) {
           }
         }
       }
+      parent {
+        id
+        number
+        title
+        url
+        state
+        repository {
+          owner { login }
+          name
+        }
+      }
+      subIssues(first: 50) {
+        nodes {
+          id
+          number
+          title
+          url
+          state
+          repository {
+            owner { login }
+            name
+          }
+        }
+      }
+      subIssuesSummary {
+        total
+        completed
+        percentCompleted
+      }
     }
   }
 }
@@ -111,6 +169,43 @@ type SingleIssueResponse struct {
 	Repository struct {
 		Issue IssueNode `json:"issue"`
 	} `json:"repository"`
+}
+
+// ParentIssueNode represents a parent issue in the GraphQL response.
+type ParentIssueNode struct {
+	ID         string `json:"id"`
+	Number     int    `json:"number"`
+	Title      string `json:"title"`
+	URL        string `json:"url"`
+	State      string `json:"state"`
+	Repository struct {
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Name string `json:"name"`
+	} `json:"repository"`
+}
+
+// SubIssueNode represents a sub-issue in the GraphQL response.
+type SubIssueNode struct {
+	ID         string `json:"id"`
+	Number     int    `json:"number"`
+	Title      string `json:"title"`
+	URL        string `json:"url"`
+	State      string `json:"state"`
+	Repository struct {
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Name string `json:"name"`
+	} `json:"repository"`
+}
+
+// SubIssuesSummaryNode represents the sub-issues summary in the GraphQL response.
+type SubIssuesSummaryNode struct {
+	Total            int `json:"total"`
+	Completed        int `json:"completed"`
+	PercentCompleted int `json:"percentCompleted"`
 }
 
 // IssueNode represents an issue in the GraphQL response.
@@ -147,6 +242,11 @@ type IssueNode struct {
 			} `json:"author"`
 		} `json:"nodes"`
 	} `json:"comments"`
+	Parent    *ParentIssueNode `json:"parent"`
+	SubIssues struct {
+		Nodes []SubIssueNode `json:"nodes"`
+	} `json:"subIssues"`
+	SubIssuesSummary *SubIssuesSummaryNode `json:"subIssuesSummary"`
 }
 
 // FetchIssue fetches a single issue by number.
@@ -228,7 +328,7 @@ func nodeToIssue(node IssueNode, owner, repo string) *Issue {
 		})
 	}
 
-	return &Issue{
+	issue := &Issue{
 		ID:        node.ID,
 		URL:       node.URL,
 		Number:    node.Number,
@@ -244,4 +344,44 @@ func nodeToIssue(node IssueNode, owner, repo string) *Issue {
 		UpdatedAt: node.UpdatedAt,
 		Comments:  comments,
 	}
+
+	// Convert parent issue
+	if node.Parent != nil {
+		issue.Parent = &IssueReference{
+			ID:     node.Parent.ID,
+			Number: node.Parent.Number,
+			Title:  node.Parent.Title,
+			URL:    node.Parent.URL,
+			State:  strings.ToLower(node.Parent.State),
+			Owner:  node.Parent.Repository.Owner.Login,
+			Repo:   node.Parent.Repository.Name,
+		}
+	}
+
+	// Convert sub-issues (children)
+	if len(node.SubIssues.Nodes) > 0 {
+		issue.Children = make([]IssueReference, 0, len(node.SubIssues.Nodes))
+		for _, sub := range node.SubIssues.Nodes {
+			issue.Children = append(issue.Children, IssueReference{
+				ID:     sub.ID,
+				Number: sub.Number,
+				Title:  sub.Title,
+				URL:    sub.URL,
+				State:  strings.ToLower(sub.State),
+				Owner:  sub.Repository.Owner.Login,
+				Repo:   sub.Repository.Name,
+			})
+		}
+	}
+
+	// Convert sub-issues summary
+	if node.SubIssuesSummary != nil && node.SubIssuesSummary.Total > 0 {
+		issue.SubIssuesSummary = &SubIssuesSummary{
+			Total:           node.SubIssuesSummary.Total,
+			Completed:       node.SubIssuesSummary.Completed,
+			PercentComplete: node.SubIssuesSummary.PercentCompleted,
+		}
+	}
+
+	return issue
 }
