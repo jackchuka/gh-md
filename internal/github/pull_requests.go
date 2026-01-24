@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// pullRequestsQuery fetches multiple PRs with pagination.
+// GitHub GraphQL API has a 500,000 node limit per query.
+// With nested connections, we must limit: 25 PRs × (50 comments + 50 threads × 20 nested) = 26,250 nodes
 const pullRequestsQuery = `
 query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [PullRequestState!]) {
   repository(owner: $owner, name: $repo) {
@@ -42,7 +45,7 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [P
             login
           }
         }
-        comments(first: 100) {
+        comments(first: 50) {
           nodes {
             id
             body
@@ -53,14 +56,14 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [P
             }
           }
         }
-        reviewThreads(first: 100) {
+        reviewThreads(first: 50) {
           nodes {
             id
             path
             line
             isResolved
             isOutdated
-            comments(first: 100) {
+            comments(first: 20) {
               nodes {
                 id
                 body
@@ -250,7 +253,7 @@ func (c *Client) FetchPullRequest(owner, repo string, number int) (*PullRequest,
 func (c *Client) FetchPullRequests(owner, repo string, limit int) ([]PullRequest, error) {
 	var prs []PullRequest
 	var cursor *string
-	pageSize := 100
+	pageSize := 25
 	if limit > 0 && limit < pageSize {
 		pageSize = limit
 	}
