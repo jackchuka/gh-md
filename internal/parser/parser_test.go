@@ -588,6 +588,16 @@ func TestResolveFilePath(t *testing.T) {
 		}
 	})
 
+	t.Run("root-relative path with .md and dot-slash", func(t *testing.T) {
+		got, err := ResolveFilePath("./owner/repo/issues/123.md")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != expected {
+			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
 	t.Run("root-relative path without .md", func(t *testing.T) {
 		got, err := ResolveFilePath("owner/repo/issues/123")
 		if err != nil {
@@ -615,6 +625,24 @@ func TestResolveFilePath(t *testing.T) {
 		}
 		if got != expected {
 			t.Fatalf("got %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("pull path with .md", func(t *testing.T) {
+		pr := filepath.Join(root, "owner", "repo", "pulls", "456.md")
+		if err := os.MkdirAll(filepath.Dir(pr), 0o755); err != nil {
+			t.Fatalf("MkdirAll failed: %v", err)
+		}
+		if err := os.WriteFile(pr, []byte("test"), 0o644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		got, err := ResolveFilePath("owner/repo/pull/456.md")
+		if err != nil {
+			t.Fatalf("ResolveFilePath failed: %v", err)
+		}
+		if got != pr {
+			t.Fatalf("got %q, want %q", got, pr)
 		}
 	})
 }
