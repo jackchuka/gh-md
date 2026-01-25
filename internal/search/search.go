@@ -1,9 +1,9 @@
 package search
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/jackchuka/gh-md/internal/config"
@@ -66,8 +66,10 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 			}
 		}
 
-		// Determine item type from path
-		itemType := detectType(path)
+		itemType := "unknown"
+		if label, ok := parsed.ItemType.ListLabel(); ok {
+			itemType = label
+		}
 
 		// Apply type filters
 		if !includeAll {
@@ -87,6 +89,11 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 			}
 		}
 
+		url := ""
+		if seg, ok := parsed.ItemType.URLSegment(); ok {
+			url = fmt.Sprintf("https://github.com/%s/%s/%s/%d", parsed.Owner, parsed.Repo, seg, parsed.Number)
+		}
+
 		item := Item{
 			FilePath: path,
 			Owner:    parsed.Owner,
@@ -95,7 +102,7 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 			Type:     itemType,
 			State:    normalizeState(parsed.State),
 			Title:    parsed.Title,
-			URL:      buildURL(parsed.Owner, parsed.Repo, itemType, parsed.Number),
+			URL:      url,
 		}
 
 		items = append(items, item)
@@ -109,41 +116,7 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 	return items, nil
 }
 
-// detectType determines the item type from the file path.
-func detectType(path string) string {
-	dir := filepath.Dir(path)
-	base := filepath.Base(dir)
-
-	switch base {
-	case "issues":
-		return "issue"
-	case "pulls":
-		return "pr"
-	case "discussions":
-		return "discussion"
-	default:
-		return "unknown"
-	}
-}
-
 // normalizeState converts state to a consistent lowercase format.
 func normalizeState(state string) string {
 	return strings.ToLower(state)
-}
-
-// buildURL constructs a GitHub URL for the item.
-func buildURL(owner, repo, itemType string, number int) string {
-	var typeSegment string
-	switch itemType {
-	case "issue":
-		typeSegment = "issues"
-	case "pr":
-		typeSegment = "pull"
-	case "discussion":
-		typeSegment = "discussions"
-	default:
-		return ""
-	}
-
-	return "https://github.com/" + owner + "/" + repo + "/" + typeSegment + "/" + strconv.Itoa(number)
 }

@@ -147,17 +147,10 @@ func extractTitleAndBody(content string) (string, string) {
 func detectItemType(path string) github.ItemType {
 	dir := filepath.Dir(path)
 	base := filepath.Base(dir)
-
-	switch base {
-	case "issues":
-		return github.ItemTypeIssue
-	case "pulls":
-		return github.ItemTypePullRequest
-	case "discussions":
-		return github.ItemTypeDiscussion
-	default:
-		return ""
+	if itemType, ok := github.ItemTypeFromDirName(base); ok {
+		return itemType
 	}
+	return ""
 }
 
 // ResolveFilePath resolves a URL, short path, or file path to an actual file path.
@@ -184,7 +177,7 @@ func ResolveFilePath(input string) (string, error) {
 
 	parsed, err := github.ParseInput(input)
 	if err == nil && parsed.Number > 0 && parsed.ItemType != "" {
-		itemDir, ok := itemTypeDir(parsed.ItemType)
+		itemDir, ok := parsed.ItemType.DirName()
 		if !ok {
 			return "", fmt.Errorf("unsupported item type: %s", parsed.ItemType)
 		}
@@ -233,19 +226,6 @@ func resolveRootRelativePath(input string) (string, error) {
 	}
 
 	return "", fmt.Errorf("local file not found under root: %s", root)
-}
-
-func itemTypeDir(itemType github.ItemType) (string, bool) {
-	switch itemType {
-	case github.ItemTypeIssue:
-		return "issues", true
-	case github.ItemTypePullRequest:
-		return "pulls", true
-	case github.ItemTypeDiscussion:
-		return "discussions", true
-	default:
-		return "", false
-	}
 }
 
 const (

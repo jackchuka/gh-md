@@ -126,21 +126,8 @@ func parsePathLikeInput(input string) (*ParsedInput, bool) {
 		parts = append(parts, part)
 	}
 
-	itemTypeForDir := func(dir string) (ItemType, bool) {
-		switch dir {
-		case "issues":
-			return ItemTypeIssue, true
-		case "pull", "pulls":
-			return ItemTypePullRequest, true
-		case "discussions":
-			return ItemTypeDiscussion, true
-		default:
-			return "", false
-		}
-	}
-
 	for i, part := range parts {
-		itemType, ok := itemTypeForDir(part)
+		itemType, ok := ItemTypeFromDirName(part)
 		if !ok {
 			continue
 		}

@@ -57,21 +57,71 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	var totalErrors []error
 
-	if pullAll || pullIssues {
-		if err := pullAllIssues(cmd, client, input.Owner, input.Repo); err != nil {
-			totalErrors = append(totalErrors, fmt.Errorf("issues: %w", err))
-		}
+	handlers := []struct {
+		enabled bool
+		label   string
+		run     func() error
+	}{
+		{
+			enabled: pullAll || pullIssues,
+			label:   "issues",
+			run: func() error {
+				return pullAllItems(
+					cmd,
+					input.Owner,
+					input.Repo,
+					"issues",
+					"issue",
+					func() ([]github.Issue, error) { return client.FetchIssues(input.Owner, input.Repo, pullLimit) },
+					writer.WriteIssue,
+					func(i *github.Issue) int { return i.Number },
+				)
+			},
+		},
+		{
+			enabled: pullAll || pullPRs,
+			label:   "pull requests",
+			run: func() error {
+				return pullAllItems(
+					cmd,
+					input.Owner,
+					input.Repo,
+					"pull requests",
+					"PR",
+					func() ([]github.PullRequest, error) {
+						return client.FetchPullRequests(input.Owner, input.Repo, pullLimit)
+					},
+					writer.WritePullRequest,
+					func(pr *github.PullRequest) int { return pr.Number },
+				)
+			},
+		},
+		{
+			enabled: pullAll || pullDiscussions,
+			label:   "discussions",
+			run: func() error {
+				return pullAllItems(
+					cmd,
+					input.Owner,
+					input.Repo,
+					"discussions",
+					"discussion",
+					func() ([]github.Discussion, error) {
+						return client.FetchDiscussions(input.Owner, input.Repo, pullLimit)
+					},
+					writer.WriteDiscussion,
+					func(d *github.Discussion) int { return d.Number },
+				)
+			},
+		},
 	}
 
-	if pullAll || pullPRs {
-		if err := pullAllPRs(cmd, client, input.Owner, input.Repo); err != nil {
-			totalErrors = append(totalErrors, fmt.Errorf("pull requests: %w", err))
+	for _, h := range handlers {
+		if !h.enabled {
+			continue
 		}
-	}
-
-	if pullAll || pullDiscussions {
-		if err := pullAllDiscussions(cmd, client, input.Owner, input.Repo); err != nil {
-			totalErrors = append(totalErrors, fmt.Errorf("discussions: %w", err))
+		if err := h.run(); err != nil {
+			totalErrors = append(totalErrors, fmt.Errorf("%s: %w", h.label, err))
 		}
 	}
 
@@ -87,121 +137,102 @@ func runPull(cmd *cobra.Command, args []string) error {
 }
 
 func pullSingleItem(cmd *cobra.Command, client *github.Client, input *github.ParsedInput) error {
+	handlers := map[github.ItemType]func() error{
+		github.ItemTypeIssue: func() error {
+			return pullSingle(
+				cmd,
+				input,
+				func() (*github.Issue, error) { return client.FetchIssue(input.Owner, input.Repo, input.Number) },
+				writer.WriteIssue,
+				"issue",
+				func(i *github.Issue) int { return i.Number },
+			)
+		},
+		github.ItemTypePullRequest: func() error {
+			return pullSingle(
+				cmd,
+				input,
+				func() (*github.PullRequest, error) {
+					return client.FetchPullRequest(input.Owner, input.Repo, input.Number)
+				},
+				writer.WritePullRequest,
+				"PR",
+				func(pr *github.PullRequest) int { return pr.Number },
+			)
+		},
+		github.ItemTypeDiscussion: func() error {
+			return pullSingle(
+				cmd,
+				input,
+				func() (*github.Discussion, error) {
+					return client.FetchDiscussion(input.Owner, input.Repo, input.Number)
+				},
+				writer.WriteDiscussion,
+				"discussion",
+				func(d *github.Discussion) int { return d.Number },
+			)
+		},
+	}
+
+	handler, ok := handlers[input.ItemType]
+	if !ok {
+		return fmt.Errorf("unsupported item type: %s", input.ItemType)
+	}
+	return handler()
+}
+
+func pullSingle[T any](
+	cmd *cobra.Command,
+	input *github.ParsedInput,
+	fetch func() (*T, error),
+	write func(*T) (string, error),
+	writtenLabel string,
+	number func(*T) int,
+) error {
 	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s #%d...", input.ItemType, input.Number))
 	s.Start()
-
-	switch input.ItemType {
-	case github.ItemTypeIssue:
-		issue, err := client.FetchIssue(input.Owner, input.Repo, input.Number)
-		s.Stop()
-		if err != nil {
-			return err
-		}
-		path, err := writer.WriteIssue(issue)
-		if err != nil {
-			return err
-		}
-		cmd.Printf("Wrote issue #%d to %s\n", issue.Number, path)
-
-	case github.ItemTypePullRequest:
-		pr, err := client.FetchPullRequest(input.Owner, input.Repo, input.Number)
-		s.Stop()
-		if err != nil {
-			return err
-		}
-		path, err := writer.WritePullRequest(pr)
-		if err != nil {
-			return err
-		}
-		cmd.Printf("Wrote PR #%d to %s\n", pr.Number, path)
-
-	case github.ItemTypeDiscussion:
-		d, err := client.FetchDiscussion(input.Owner, input.Repo, input.Number)
-		s.Stop()
-		if err != nil {
-			return err
-		}
-		path, err := writer.WriteDiscussion(d)
-		if err != nil {
-			return err
-		}
-		cmd.Printf("Wrote discussion #%d to %s\n", d.Number, path)
+	item, err := fetch()
+	s.Stop()
+	if err != nil {
+		return err
 	}
-
+	path, err := write(item)
+	if err != nil {
+		return err
+	}
+	cmd.Printf("Wrote %s #%d to %s\n", writtenLabel, number(item), path)
 	return nil
 }
 
-func pullAllIssues(cmd *cobra.Command, client *github.Client, owner, repo string) error {
-	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching issues from %s/%s...", owner, repo))
+func pullAllItems[T any](
+	cmd *cobra.Command,
+	owner, repo string,
+	fetchLabel string, // "issues", "pull requests", "discussions"
+	writeLabel string, // "issue", "PR", "discussion"
+	fetch func() ([]T, error),
+	write func(*T) (string, error),
+	number func(*T) int,
+) error {
+	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s from %s/%s...", fetchLabel, owner, repo))
 	s.Start()
-
-	issues, err := client.FetchIssues(owner, repo, pullLimit)
+	items, err := fetch()
 	s.Stop()
 	if err != nil {
 		return err
 	}
 
-	if len(issues) == 0 {
-		cmd.Println("No issues found")
+	if len(items) == 0 {
+		cmd.Printf("No %s found\n", fetchLabel)
 		return nil
 	}
 
-	for _, issue := range issues {
-		if _, err := writer.WriteIssue(&issue); err != nil {
-			return fmt.Errorf("failed to write issue #%d: %w", issue.Number, err)
+	for i := range items {
+		item := &items[i]
+		if _, err := write(item); err != nil {
+			return fmt.Errorf("failed to write %s #%d: %w", writeLabel, number(item), err)
 		}
 	}
 
-	cmd.Printf("Wrote %d issues\n", len(issues))
-	return nil
-}
-
-func pullAllPRs(cmd *cobra.Command, client *github.Client, owner, repo string) error {
-	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching pull requests from %s/%s...", owner, repo))
-	s.Start()
-
-	prs, err := client.FetchPullRequests(owner, repo, pullLimit)
-	s.Stop()
-	if err != nil {
-		return err
-	}
-
-	if len(prs) == 0 {
-		cmd.Println("No pull requests found")
-		return nil
-	}
-
-	for _, pr := range prs {
-		if _, err := writer.WritePullRequest(&pr); err != nil {
-			return fmt.Errorf("failed to write PR #%d: %w", pr.Number, err)
-		}
-	}
-
-	cmd.Printf("Wrote %d pull requests\n", len(prs))
-	return nil
-}
-
-func pullAllDiscussions(cmd *cobra.Command, client *github.Client, owner, repo string) error {
-	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching discussions from %s/%s...", owner, repo))
-	s.Start()
-
-	discussions, err := client.FetchDiscussions(owner, repo, pullLimit)
-	s.Stop()
-	if err != nil {
-		return err
-	}
-
-	if len(discussions) == 0 {
-		cmd.Println("No discussions found")
-		return nil
-	}
-
-	for _, d := range discussions {
-		if _, err := writer.WriteDiscussion(&d); err != nil {
-			return fmt.Errorf("failed to write discussion #%d: %w", d.Number, err)
-		}
-	}
-
-	cmd.Printf("Wrote %d discussions\n", len(discussions))
+	cmd.Printf("Wrote %d %s\n", len(items), fetchLabel)
 	return nil
 }
