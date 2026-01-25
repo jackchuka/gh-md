@@ -34,47 +34,29 @@ func GetRepoDir(owner, repo string) (string, error) {
 	}
 
 	dir := filepath.Join(root, owner, repo)
-	if isDir(dir) {
-		return dir, nil
-	}
-
 	return dir, nil
+}
+
+// getItemDir returns the directory for a specific item type.
+func getItemDir(owner, repo, itemType string) (string, error) {
+	repoDir, err := GetRepoDir(owner, repo)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoDir, itemType), nil
 }
 
 // GetIssuesDir returns the issues directory for a repo.
 func GetIssuesDir(owner, repo string) (string, error) {
-	repoDir, err := GetRepoDir(owner, repo)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(repoDir, "issues"), nil
+	return getItemDir(owner, repo, "issues")
 }
 
 // GetPullsDir returns the pulls directory for a repo.
 func GetPullsDir(owner, repo string) (string, error) {
-	repoDir, err := GetRepoDir(owner, repo)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(repoDir, "pulls"), nil
+	return getItemDir(owner, repo, "pulls")
 }
 
 // GetDiscussionsDir returns the discussions directory for a repo.
 func GetDiscussionsDir(owner, repo string) (string, error) {
-	repoDir, err := GetRepoDir(owner, repo)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(repoDir, "discussions"), nil
-}
-
-func isDir(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
+	return getItemDir(owner, repo, "discussions")
 }

@@ -191,14 +191,10 @@ type PullRequestNode struct {
 		Oid string `json:"oid"`
 	} `json:"mergeCommit"`
 	Labels struct {
-		Nodes []struct {
-			Name string `json:"name"`
-		} `json:"nodes"`
+		Nodes []LabelNode `json:"nodes"`
 	} `json:"labels"`
 	Assignees struct {
-		Nodes []struct {
-			Login string `json:"login"`
-		} `json:"nodes"`
+		Nodes []AssigneeNode `json:"nodes"`
 	} `json:"assignees"`
 	Comments struct {
 		Nodes []struct {
@@ -291,15 +287,8 @@ func (c *Client) FetchPullRequests(owner, repo string, limit int) ([]PullRequest
 }
 
 func nodeToPullRequest(node PullRequestNode, owner, repo string) *PullRequest {
-	labels := make([]string, 0, len(node.Labels.Nodes))
-	for _, l := range node.Labels.Nodes {
-		labels = append(labels, l.Name)
-	}
-
-	assignees := make([]string, 0, len(node.Assignees.Nodes))
-	for _, a := range node.Assignees.Nodes {
-		assignees = append(assignees, a.Login)
-	}
+	labels := extractLabelNames(node.Labels.Nodes)
+	assignees := extractAssigneeLogins(node.Assignees.Nodes)
 
 	comments := make([]Comment, 0, len(node.Comments.Nodes))
 	for _, c := range node.Comments.Nodes {

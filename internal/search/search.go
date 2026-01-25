@@ -3,6 +3,7 @@ package search
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jackchuka/gh-md/internal/config"
@@ -144,29 +145,5 @@ func buildURL(owner, repo, itemType string, number int) string {
 		return ""
 	}
 
-	return "https://github.com/" + owner + "/" + repo + "/" + typeSegment + "/" + itoa(number)
-}
-
-// itoa converts int to string without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-
-	var digits []byte
-	negative := n < 0
-	if negative {
-		n = -n
-	}
-
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-
-	if negative {
-		digits = append([]byte{'-'}, digits...)
-	}
-
-	return string(digits)
+	return "https://github.com/" + owner + "/" + repo + "/" + typeSegment + "/" + strconv.Itoa(number)
 }

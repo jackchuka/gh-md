@@ -9,6 +9,49 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// buildMarkdownWithFrontmatter creates a markdown document with YAML frontmatter.
+func buildMarkdownWithFrontmatter(fm interface{}, title, body string) (*strings.Builder, error) {
+	fmBytes, err := yaml.Marshal(fm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal frontmatter: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	sb.Write(fmBytes)
+	sb.WriteString("---\n\n")
+	sb.WriteString("<!-- gh-md:content -->\n")
+	sb.WriteString("# ")
+	sb.WriteString(title)
+	sb.WriteString("\n\n")
+	sb.WriteString(body)
+	sb.WriteString("\n<!-- /gh-md:content -->\n")
+
+	return &sb, nil
+}
+
+// finishMarkdown adds the new-comment marker and returns the final string.
+func finishMarkdown(sb *strings.Builder) string {
+	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
+	return sb.String()
+}
+
+// writeCommentHeader writes the common comment metadata block.
+func writeCommentHeader(sb *strings.Builder, tagName, id, author string, createdAt time.Time) {
+	fmt.Fprintf(sb, "<!-- gh-md:%s\n", tagName)
+	fmt.Fprintf(sb, "id: %s\n", id)
+	fmt.Fprintf(sb, "author: %s\n", author)
+	fmt.Fprintf(sb, "created: %s\n", createdAt.Format(time.RFC3339))
+	sb.WriteString("-->\n")
+}
+
+// writeCommentBody writes the author heading and body with closing tag.
+func writeCommentBody(sb *strings.Builder, tagName, author, body string, createdAt time.Time, headingLevel string) {
+	fmt.Fprintf(sb, "%s @%s (%s)\n\n", headingLevel, author, createdAt.Format("2006-01-02"))
+	sb.WriteString(body)
+	fmt.Fprintf(sb, "\n<!-- /gh-md:%s -->\n\n", tagName)
+}
+
 // IssueReferenceFrontmatter represents a reference to a parent or child issue in frontmatter.
 type IssueReferenceFrontmatter struct {
 	Number int    `yaml:"number"`
@@ -146,33 +189,19 @@ func IssueToMarkdown(issue *github.Issue) (string, error) {
 		}
 	}
 
-	fmBytes, err := yaml.Marshal(fm)
+	sb, err := buildMarkdownWithFrontmatter(fm, issue.Title, issue.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal frontmatter: %w", err)
+		return "", err
 	}
-
-	var sb strings.Builder
-	sb.WriteString("---\n")
-	sb.Write(fmBytes)
-	sb.WriteString("---\n\n")
-	sb.WriteString("<!-- gh-md:content -->\n")
-	sb.WriteString("# ")
-	sb.WriteString(issue.Title)
-	sb.WriteString("\n\n")
-	sb.WriteString(issue.Body)
-	sb.WriteString("\n<!-- /gh-md:content -->\n")
 
 	if len(issue.Comments) > 0 {
 		sb.WriteString("\n---\n\n")
 		for _, c := range issue.Comments {
-			writeComment(&sb, c)
+			writeComment(sb, c)
 		}
 	}
 
-	// Marker for new comments
-	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
-
-	return sb.String(), nil
+	return finishMarkdown(sb), nil
 }
 
 // PullRequestToMarkdown converts a PR to markdown with YAML frontmatter.
@@ -201,41 +230,26 @@ func PullRequestToMarkdown(pr *github.PullRequest) (string, error) {
 		fm.Merged = pr.MergedAt
 	}
 
-	fmBytes, err := yaml.Marshal(fm)
+	sb, err := buildMarkdownWithFrontmatter(fm, pr.Title, pr.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal frontmatter: %w", err)
+		return "", err
 	}
-
-	var sb strings.Builder
-	sb.WriteString("---\n")
-	sb.Write(fmBytes)
-	sb.WriteString("---\n\n")
-	sb.WriteString("<!-- gh-md:content -->\n")
-	sb.WriteString("# ")
-	sb.WriteString(pr.Title)
-	sb.WriteString("\n\n")
-	sb.WriteString(pr.Body)
-	sb.WriteString("\n<!-- /gh-md:content -->\n")
 
 	if len(pr.Comments) > 0 {
 		sb.WriteString("\n---\n\n")
 		for _, c := range pr.Comments {
-			writeComment(&sb, c)
+			writeComment(sb, c)
 		}
 	}
 
-	// Review threads (inline code review conversations)
 	if len(pr.ReviewThreads) > 0 {
 		sb.WriteString("\n## Review Threads\n\n")
 		for _, thread := range pr.ReviewThreads {
-			writeReviewThread(&sb, thread)
+			writeReviewThread(sb, thread)
 		}
 	}
 
-	// Marker for new comments
-	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
-
-	return sb.String(), nil
+	return finishMarkdown(sb), nil
 }
 
 // DiscussionToMarkdown converts a discussion to markdown with YAML frontmatter.
@@ -256,44 +270,24 @@ func DiscussionToMarkdown(d *github.Discussion) (string, error) {
 		LastPulled: time.Now().UTC(),
 	}
 
-	fmBytes, err := yaml.Marshal(fm)
+	sb, err := buildMarkdownWithFrontmatter(fm, d.Title, d.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal frontmatter: %w", err)
+		return "", err
 	}
-
-	var sb strings.Builder
-	sb.WriteString("---\n")
-	sb.Write(fmBytes)
-	sb.WriteString("---\n\n")
-	sb.WriteString("<!-- gh-md:content -->\n")
-	sb.WriteString("# ")
-	sb.WriteString(d.Title)
-	sb.WriteString("\n\n")
-	sb.WriteString(d.Body)
-	sb.WriteString("\n<!-- /gh-md:content -->\n")
 
 	if len(d.Comments) > 0 {
 		sb.WriteString("\n---\n\n")
 		for _, c := range d.Comments {
-			writeDiscussionComment(&sb, c, "")
+			writeDiscussionComment(sb, c, "")
 		}
 	}
 
-	// Marker for new comments
-	sb.WriteString("\n<!-- gh-md:new-comment -->\n\n<!-- /gh-md:new-comment -->\n")
-
-	return sb.String(), nil
+	return finishMarkdown(sb), nil
 }
 
 func writeComment(sb *strings.Builder, c github.Comment) {
-	sb.WriteString("<!-- gh-md:comment\n")
-	fmt.Fprintf(sb, "id: %s\n", c.ID)
-	fmt.Fprintf(sb, "author: %s\n", c.Author)
-	fmt.Fprintf(sb, "created: %s\n", c.CreatedAt.Format(time.RFC3339))
-	sb.WriteString("-->\n")
-	fmt.Fprintf(sb, "### @%s (%s)\n\n", c.Author, c.CreatedAt.Format("2006-01-02"))
-	sb.WriteString(c.Body)
-	sb.WriteString("\n<!-- /gh-md:comment -->\n\n")
+	writeCommentHeader(sb, "comment", c.ID, c.Author, c.CreatedAt)
+	writeCommentBody(sb, "comment", c.Author, c.Body, c.CreatedAt, "###")
 }
 
 func writeReviewThread(sb *strings.Builder, thread github.ReviewThread) {

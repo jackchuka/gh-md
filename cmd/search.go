@@ -42,9 +42,7 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 
 	searchCmd.Flags().StringVar(&searchRepo, "repo", "", "Limit search to a specific repo (owner/repo)")
-	searchCmd.Flags().BoolVar(&searchIssues, "issues", false, "Search only issues")
-	searchCmd.Flags().BoolVar(&searchPRs, "prs", false, "Search only pull requests")
-	searchCmd.Flags().BoolVar(&searchDiscussions, "discussions", false, "Search only discussions")
+	registerItemTypeFlags(searchCmd, &searchIssues, &searchPRs, &searchDiscussions, "Search")
 	searchCmd.Flags().BoolVar(&searchList, "list", false, "Print matches without interactive FZF")
 }
 

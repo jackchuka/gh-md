@@ -75,9 +75,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 
 	// Conflict check and fetch remote state
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Writer = cmd.ErrOrStderr()
-	s.Suffix = " Checking for conflicts..."
+	s := newSpinner(cmd.ErrOrStderr(), "Checking for conflicts...")
 	s.Start()
 
 	remoteState, err := client.FetchRemoteState(parsed.ItemType, parsed.Owner, parsed.Repo, parsed.Number)

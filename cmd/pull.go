@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
-	"github.com/briandowns/spinner"
 	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/writer"
 	"github.com/spf13/cobra"
@@ -34,9 +32,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(pullCmd)
 
-	pullCmd.Flags().BoolVar(&pullIssues, "issues", false, "Pull only issues")
-	pullCmd.Flags().BoolVar(&pullPRs, "prs", false, "Pull only pull requests")
-	pullCmd.Flags().BoolVar(&pullDiscussions, "discussions", false, "Pull only discussions")
+	registerItemTypeFlags(pullCmd, &pullIssues, &pullPRs, &pullDiscussions, "Pull")
 	pullCmd.Flags().IntVar(&pullLimit, "limit", 0, "Limit the number of items to pull (0 = no limit)")
 }
 
@@ -91,9 +87,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 }
 
 func pullSingleItem(cmd *cobra.Command, client *github.Client, input *github.ParsedInput) error {
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Writer = cmd.ErrOrStderr()
-	s.Suffix = fmt.Sprintf(" Fetching %s #%d...", input.ItemType, input.Number)
+	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s #%d...", input.ItemType, input.Number))
 	s.Start()
 
 	switch input.ItemType {
@@ -138,9 +132,7 @@ func pullSingleItem(cmd *cobra.Command, client *github.Client, input *github.Par
 }
 
 func pullAllIssues(cmd *cobra.Command, client *github.Client, owner, repo string) error {
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Writer = cmd.ErrOrStderr()
-	s.Suffix = fmt.Sprintf(" Fetching issues from %s/%s...", owner, repo)
+	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching issues from %s/%s...", owner, repo))
 	s.Start()
 
 	issues, err := client.FetchIssues(owner, repo, pullLimit)
@@ -165,9 +157,7 @@ func pullAllIssues(cmd *cobra.Command, client *github.Client, owner, repo string
 }
 
 func pullAllPRs(cmd *cobra.Command, client *github.Client, owner, repo string) error {
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Writer = cmd.ErrOrStderr()
-	s.Suffix = fmt.Sprintf(" Fetching pull requests from %s/%s...", owner, repo)
+	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching pull requests from %s/%s...", owner, repo))
 	s.Start()
 
 	prs, err := client.FetchPullRequests(owner, repo, pullLimit)
@@ -192,9 +182,7 @@ func pullAllPRs(cmd *cobra.Command, client *github.Client, owner, repo string) e
 }
 
 func pullAllDiscussions(cmd *cobra.Command, client *github.Client, owner, repo string) error {
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Writer = cmd.ErrOrStderr()
-	s.Suffix = fmt.Sprintf(" Fetching discussions from %s/%s...", owner, repo)
+	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching discussions from %s/%s...", owner, repo))
 	s.Start()
 
 	discussions, err := client.FetchDiscussions(owner, repo, pullLimit)

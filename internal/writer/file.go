@@ -9,9 +9,20 @@ import (
 	"github.com/jackchuka/gh-md/internal/github"
 )
 
-// WriteIssue writes an issue to the filesystem.
-func WriteIssue(issue *github.Issue) (string, error) {
-	dir, err := config.GetIssuesDir(issue.Owner, issue.Repo)
+// Item is an interface for items that can be written to markdown.
+type Item interface {
+	GetOwner() string
+	GetRepo() string
+	GetNumber() int
+}
+
+// writeItemToFile is a generic helper for writing items to markdown files.
+func writeItemToFile(
+	item Item,
+	getDirFunc func(owner, repo string) (string, error),
+	toMarkdownFunc func() (string, error),
+) (string, error) {
+	dir, err := getDirFunc(item.GetOwner(), item.GetRepo())
 	if err != nil {
 		return "", err
 	}
@@ -20,65 +31,44 @@ func WriteIssue(issue *github.Issue) (string, error) {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	content, err := IssueToMarkdown(issue)
+	content, err := toMarkdownFunc()
 	if err != nil {
 		return "", err
 	}
 
-	path := filepath.Join(dir, fmt.Sprintf("%d.md", issue.Number))
+	path := filepath.Join(dir, fmt.Sprintf("%d.md", item.GetNumber()))
 	if err := writeFile(path, content); err != nil {
 		return "", err
 	}
 
 	return path, nil
+}
+
+// WriteIssue writes an issue to the filesystem.
+func WriteIssue(issue *github.Issue) (string, error) {
+	return writeItemToFile(
+		issue,
+		config.GetIssuesDir,
+		func() (string, error) { return IssueToMarkdown(issue) },
+	)
 }
 
 // WritePullRequest writes a PR to the filesystem.
 func WritePullRequest(pr *github.PullRequest) (string, error) {
-	dir, err := config.GetPullsDir(pr.Owner, pr.Repo)
-	if err != nil {
-		return "", err
-	}
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	content, err := PullRequestToMarkdown(pr)
-	if err != nil {
-		return "", err
-	}
-
-	path := filepath.Join(dir, fmt.Sprintf("%d.md", pr.Number))
-	if err := writeFile(path, content); err != nil {
-		return "", err
-	}
-
-	return path, nil
+	return writeItemToFile(
+		pr,
+		config.GetPullsDir,
+		func() (string, error) { return PullRequestToMarkdown(pr) },
+	)
 }
 
 // WriteDiscussion writes a discussion to the filesystem.
 func WriteDiscussion(d *github.Discussion) (string, error) {
-	dir, err := config.GetDiscussionsDir(d.Owner, d.Repo)
-	if err != nil {
-		return "", err
-	}
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	content, err := DiscussionToMarkdown(d)
-	if err != nil {
-		return "", err
-	}
-
-	path := filepath.Join(dir, fmt.Sprintf("%d.md", d.Number))
-	if err := writeFile(path, content); err != nil {
-		return "", err
-	}
-
-	return path, nil
+	return writeItemToFile(
+		d,
+		config.GetDiscussionsDir,
+		func() (string, error) { return DiscussionToMarkdown(d) },
+	)
 }
 
 // writeFile writes content to a file atomically by writing to a temp file first.
