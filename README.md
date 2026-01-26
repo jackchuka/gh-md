@@ -77,20 +77,16 @@ Interactively search local files with [FZF](https://github.com/junegunn/fzf).
 # Search all local files
 gh md search
 
-# Search with an initial query
-gh md search bug
+# Search within a specific repository
+gh md search owner/repo
 
 # Filter by type
 gh md search --issues
 gh md search --prs
 gh md search --discussions
 
-# Filter by repository
-gh md search --repo owner/repo
-
 # Non-interactive list mode
 gh md search --list
-gh md search --list bug
 ```
 
 **Actions after selection:**
