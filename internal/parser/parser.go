@@ -490,3 +490,44 @@ func extractCommentBody(content string) string {
 	body := strings.Join(lines[startIdx:], "\n")
 	return strings.TrimSpace(body)
 }
+
+// WalkFilters specifies which files to include when walking.
+type WalkFilters struct {
+	Repo string // "owner/repo" format, empty = all repos
+}
+
+// WalkParsedFiles walks the gh-md root directory and calls the callback for each parsed file.
+// Returns early if callback returns an error.
+func WalkParsedFiles(filters WalkFilters, callback func(*ParsedFile) error) error {
+	root, err := config.GetRootDir()
+	if err != nil {
+		return err
+	}
+
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // Skip directories we can't read
+		}
+
+		// Only process .md files
+		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+
+		// Parse the file to extract metadata
+		parsed, err := ParseFile(path)
+		if err != nil {
+			return nil // Skip files that can't be parsed
+		}
+
+		// Apply repo filter
+		if filters.Repo != "" {
+			repoPath := parsed.Owner + "/" + parsed.Repo
+			if repoPath != filters.Repo {
+				return nil
+			}
+		}
+
+		return callback(parsed)
+	})
+}

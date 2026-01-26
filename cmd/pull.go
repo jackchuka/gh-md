@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/jackchuka/gh-md/internal/github"
+	"github.com/jackchuka/gh-md/internal/meta"
 	"github.com/jackchuka/gh-md/internal/writer"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +15,8 @@ var (
 	pullPRs         bool
 	pullDiscussions bool
 	pullLimit       int
+	pullOpenOnly    bool
+	pullFull        bool
 )
 
 var pullCmd = &cobra.Command{
@@ -20,9 +24,15 @@ var pullCmd = &cobra.Command{
 	Short: "Pull GitHub data to local markdown files",
 	Long: `Pull issues, PRs, and discussions from GitHub and save them as local markdown files.
 
+By default, all items (open and closed) are fetched for accurate state tracking.
+Incremental sync is used automatically - only items updated since the last pull are fetched.
+Single-item pulls (e.g., owner/repo/issues/123) always fetch regardless of state.
+
 Examples:
   gh md pull owner/repo
   gh md pull owner/repo --issues --limit 10
+  gh md pull owner/repo --open-only
+  gh md pull owner/repo --full
   gh md pull https://github.com/owner/repo/issues/123
   gh md pull owner/repo/issues/123.md`,
 	Args: cobra.ExactArgs(1),
@@ -34,6 +44,8 @@ func init() {
 
 	registerItemTypeFlags(pullCmd, &pullIssues, &pullPRs, &pullDiscussions, "Pull")
 	pullCmd.Flags().IntVar(&pullLimit, "limit", 0, "Limit the number of items to pull (0 = no limit)")
+	pullCmd.Flags().BoolVar(&pullOpenOnly, "open-only", false, "Fetch only open items (default fetches all states)")
+	pullCmd.Flags().BoolVar(&pullFull, "full", false, "Full sync - ignore last sync timestamp")
 }
 
 func runPull(cmd *cobra.Command, args []string) error {
@@ -51,6 +63,23 @@ func runPull(cmd *cobra.Command, args []string) error {
 	if input.Number > 0 {
 		return pullSingleItem(cmd, client, input)
 	}
+
+	// Load sync metadata
+	md, err := meta.Load(input.Owner, input.Repo)
+	if err != nil {
+		return fmt.Errorf("failed to load sync metadata: %w", err)
+	}
+
+	// Get since timestamps (nil if --full or no prior sync)
+	var issuesSince, pullsSince, discussionsSince *time.Time
+	if !pullFull && md.Sync != nil {
+		issuesSince = md.Sync.Issues
+		pullsSince = md.Sync.Pulls
+		discussionsSince = md.Sync.Discussions
+	}
+
+	// Track sync start time for saving later
+	syncStart := time.Now()
 
 	// If no type flags are set, pull all types
 	pullAll := !pullIssues && !pullPRs && !pullDiscussions
@@ -72,7 +101,9 @@ func runPull(cmd *cobra.Command, args []string) error {
 					input.Repo,
 					"issues",
 					"issue",
-					func() ([]github.Issue, error) { return client.FetchIssues(input.Owner, input.Repo, pullLimit) },
+					func() ([]github.Issue, error) {
+						return client.FetchIssues(input.Owner, input.Repo, pullLimit, pullOpenOnly, issuesSince)
+					},
 					writer.WriteIssue,
 					func(i *github.Issue) int { return i.Number },
 				)
@@ -89,7 +120,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 					"pull requests",
 					"PR",
 					func() ([]github.PullRequest, error) {
-						return client.FetchPullRequests(input.Owner, input.Repo, pullLimit)
+						return client.FetchPullRequests(input.Owner, input.Repo, pullLimit, pullOpenOnly, pullsSince)
 					},
 					writer.WritePullRequest,
 					func(pr *github.PullRequest) int { return pr.Number },
@@ -107,7 +138,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 					"discussions",
 					"discussion",
 					func() ([]github.Discussion, error) {
-						return client.FetchDiscussions(input.Owner, input.Repo, pullLimit)
+						return client.FetchDiscussions(input.Owner, input.Repo, pullLimit, pullOpenOnly, discussionsSince)
 					},
 					writer.WriteDiscussion,
 					func(d *github.Discussion) int { return d.Number },
@@ -122,6 +153,25 @@ func runPull(cmd *cobra.Command, args []string) error {
 		}
 		if err := h.run(); err != nil {
 			totalErrors = append(totalErrors, fmt.Errorf("%s: %w", h.label, err))
+		}
+	}
+
+	// Save sync timestamps on success
+	if len(totalErrors) == 0 {
+		if md.Sync == nil {
+			md.Sync = &meta.SyncTimestamps{}
+		}
+		if pullAll || pullIssues {
+			md.Sync.Issues = &syncStart
+		}
+		if pullAll || pullPRs {
+			md.Sync.Pulls = &syncStart
+		}
+		if pullAll || pullDiscussions {
+			md.Sync.Discussions = &syncStart
+		}
+		if err := meta.Save(input.Owner, input.Repo, md); err != nil {
+			cmd.PrintErrf("Warning: failed to save sync metadata: %v\n", err)
 		}
 	}
 
