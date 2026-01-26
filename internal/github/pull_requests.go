@@ -248,7 +248,8 @@ func (c *Client) FetchPullRequest(owner, repo string, number int) (*PullRequest,
 // FetchPullRequests fetches all PRs from a repository with pagination.
 // If openOnly is true, only OPEN PRs are fetched; otherwise all states are fetched.
 // If since is provided, fetching stops when encountering items older than the timestamp.
-func (c *Client) FetchPullRequests(owner, repo string, limit int, openOnly bool, since *time.Time) ([]PullRequest, error) {
+// If progress is non-nil, it's called after each page with the current count.
+func (c *Client) FetchPullRequests(owner, repo string, limit int, openOnly bool, since *time.Time, progress ProgressFunc) ([]PullRequest, error) {
 	var prs []PullRequest
 	var cursor *string
 	pageSize := 25
@@ -286,8 +287,15 @@ func (c *Client) FetchPullRequests(owner, repo string, limit int, openOnly bool,
 			}
 			prs = append(prs, *nodeToPullRequest(node, owner, repo))
 			if limit > 0 && len(prs) >= limit {
+				if progress != nil {
+					progress(len(prs))
+				}
 				return prs, nil
 			}
+		}
+
+		if progress != nil {
+			progress(len(prs))
 		}
 
 		if !resp.Repository.PullRequests.PageInfo.HasNextPage {

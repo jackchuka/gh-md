@@ -131,6 +131,34 @@ const (
 	ItemTypeDiscussion  ItemType = "discussion"
 )
 
+// Display returns the human-readable singular form.
+func (t ItemType) Display() string {
+	switch t {
+	case ItemTypeIssue:
+		return "issue"
+	case ItemTypePullRequest:
+		return "PR"
+	case ItemTypeDiscussion:
+		return "discussion"
+	default:
+		return string(t)
+	}
+}
+
+// DisplayPlural returns the human-readable plural form.
+func (t ItemType) DisplayPlural() string {
+	switch t {
+	case ItemTypeIssue:
+		return "issues"
+	case ItemTypePullRequest:
+		return "pull requests"
+	case ItemTypeDiscussion:
+		return "discussions"
+	default:
+		return string(t) + "s"
+	}
+}
+
 // ParsedInput represents parsed command input (URL or owner/repo).
 type ParsedInput struct {
 	Owner    string
@@ -138,3 +166,6 @@ type ParsedInput struct {
 	Number   int      // 0 if fetching all
 	ItemType ItemType // Empty if fetching all types
 }
+
+// ProgressFunc is called during paginated fetches with the current count of fetched items.
+type ProgressFunc func(fetched int)

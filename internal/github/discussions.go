@@ -196,7 +196,8 @@ func (c *Client) FetchDiscussion(owner, repo string, number int) (*Discussion, e
 // FetchDiscussions fetches all discussions from a repository with pagination.
 // If openOnly is true, only OPEN discussions are fetched; otherwise all states are fetched.
 // If since is provided, fetching stops when encountering items older than the timestamp.
-func (c *Client) FetchDiscussions(owner, repo string, limit int, openOnly bool, since *time.Time) ([]Discussion, error) {
+// If progress is non-nil, it's called after each page with the current count.
+func (c *Client) FetchDiscussions(owner, repo string, limit int, openOnly bool, since *time.Time, progress ProgressFunc) ([]Discussion, error) {
 	var discussions []Discussion
 	var cursor *string
 	// Smaller page size for discussions due to nested comments/replies
@@ -235,8 +236,15 @@ func (c *Client) FetchDiscussions(owner, repo string, limit int, openOnly bool, 
 			}
 			discussions = append(discussions, *nodeToDiscussion(node, owner, repo))
 			if limit > 0 && len(discussions) >= limit {
+				if progress != nil {
+					progress(len(discussions))
+				}
 				return discussions, nil
 			}
+		}
+
+		if progress != nil {
+			progress(len(discussions))
 		}
 
 		if !resp.Repository.Discussions.PageInfo.HasNextPage {

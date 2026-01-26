@@ -264,7 +264,8 @@ func (c *Client) FetchIssue(owner, repo string, number int) (*Issue, error) {
 // FetchIssues fetches all issues from a repository with pagination.
 // If openOnly is true, only OPEN issues are fetched; otherwise all states are fetched.
 // If since is provided, fetching stops when encountering items older than the timestamp.
-func (c *Client) FetchIssues(owner, repo string, limit int, openOnly bool, since *time.Time) ([]Issue, error) {
+// If progress is non-nil, it's called after each page with the current count.
+func (c *Client) FetchIssues(owner, repo string, limit int, openOnly bool, since *time.Time, progress ProgressFunc) ([]Issue, error) {
 	var issues []Issue
 	var cursor *string
 	pageSize := 100
@@ -302,8 +303,15 @@ func (c *Client) FetchIssues(owner, repo string, limit int, openOnly bool, since
 			}
 			issues = append(issues, *nodeToIssue(node, owner, repo))
 			if limit > 0 && len(issues) >= limit {
+				if progress != nil {
+					progress(len(issues))
+				}
 				return issues, nil
 			}
+		}
+
+		if progress != nil {
+			progress(len(issues))
 		}
 
 		if !resp.Repository.Issues.PageInfo.HasNextPage {

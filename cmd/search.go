@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/jackchuka/gh-md/internal/executil"
 	"github.com/jackchuka/gh-md/internal/search"
@@ -10,7 +9,6 @@ import (
 )
 
 var (
-	searchRepo        string
 	searchIssues      bool
 	searchPRs         bool
 	searchDiscussions bool
@@ -18,7 +16,7 @@ var (
 )
 
 var searchCmd = &cobra.Command{
-	Use:   "search [query]",
+	Use:   "search [owner/repo]",
 	Short: "Search local gh-md files with FZF",
 	Long: `Search through locally-pulled GitHub issues, PRs, and discussions using FZF.
 
@@ -28,8 +26,7 @@ copy file path, or pull fresh from GitHub.
 
 Examples:
   gh md search                       # Search all local files
-  gh md search bug                   # Search with initial query "bug"
-  gh md search --repo owner/repo     # Search only in a specific repo
+  gh md search owner/repo            # Search only in a specific repo
   gh md search --issues              # Search only issues
   gh md search --prs                 # Search only pull requests
   gh md search --discussions         # Search only discussions
@@ -41,7 +38,6 @@ Examples:
 func init() {
 	rootCmd.AddCommand(searchCmd)
 
-	searchCmd.Flags().StringVar(&searchRepo, "repo", "", "Limit search to a specific repo (owner/repo)")
 	registerItemTypeFlags(searchCmd, &searchIssues, &searchPRs, &searchDiscussions, "Search")
 	searchCmd.Flags().BoolVar(&searchList, "list", false, "Print matches without interactive FZF")
 }
@@ -54,9 +50,15 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Get repo from positional argument
+	var repo string
+	if len(args) > 0 {
+		repo = args[0]
+	}
+
 	// Build filters
 	filters := search.Filters{
-		Repo:        searchRepo,
+		Repo:        repo,
 		Issues:      searchIssues,
 		PRs:         searchPRs,
 		Discussions: searchDiscussions,
@@ -73,35 +75,14 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get initial query from args
-	var query string
-	if len(args) > 0 {
-		query = args[0]
-	}
-
 	// List mode - just print and exit
 	if searchList {
-		output := search.FormatItemsForList(items)
-		if query != "" {
-			// Simple substring filter
-			var filtered []search.Item
-			queryLower := strings.ToLower(query)
-			for _, item := range items {
-				searchable := strings.ToLower(fmt.Sprintf("%s/%s #%d %s %s %s",
-					item.Owner, item.Repo, item.Number, item.Type, item.State, item.Title))
-				if strings.Contains(searchable, queryLower) {
-					filtered = append(filtered, item)
-				}
-			}
-			items = filtered
-			output = search.FormatItemsForList(items)
-		}
-		cmd.Print(output)
+		cmd.Print(search.FormatItemsForList(items))
 		return nil
 	}
 
 	// Interactive FZF selection
-	selected, err := search.RunSelector(items, query)
+	selected, err := search.RunSelector(items, "")
 	if err != nil {
 		return err
 	}

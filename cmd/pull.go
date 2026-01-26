@@ -87,22 +87,21 @@ func runPull(cmd *cobra.Command, args []string) error {
 	var totalErrors []error
 
 	handlers := []struct {
-		enabled bool
-		label   string
-		run     func() error
+		enabled  bool
+		itemType github.ItemType
+		run      func() error
 	}{
 		{
-			enabled: pullAll || pullIssues,
-			label:   "issues",
+			enabled:  pullAll || pullIssues,
+			itemType: github.ItemTypeIssue,
 			run: func() error {
 				return pullAllItems(
 					cmd,
 					input.Owner,
 					input.Repo,
-					"issues",
-					"issue",
-					func() ([]github.Issue, error) {
-						return client.FetchIssues(input.Owner, input.Repo, pullLimit, pullOpenOnly, issuesSince)
+					github.ItemTypeIssue,
+					func(progress github.ProgressFunc) ([]github.Issue, error) {
+						return client.FetchIssues(input.Owner, input.Repo, pullLimit, pullOpenOnly, issuesSince, progress)
 					},
 					writer.WriteIssue,
 					func(i *github.Issue) int { return i.Number },
@@ -110,17 +109,16 @@ func runPull(cmd *cobra.Command, args []string) error {
 			},
 		},
 		{
-			enabled: pullAll || pullPRs,
-			label:   "pull requests",
+			enabled:  pullAll || pullPRs,
+			itemType: github.ItemTypePullRequest,
 			run: func() error {
 				return pullAllItems(
 					cmd,
 					input.Owner,
 					input.Repo,
-					"pull requests",
-					"PR",
-					func() ([]github.PullRequest, error) {
-						return client.FetchPullRequests(input.Owner, input.Repo, pullLimit, pullOpenOnly, pullsSince)
+					github.ItemTypePullRequest,
+					func(progress github.ProgressFunc) ([]github.PullRequest, error) {
+						return client.FetchPullRequests(input.Owner, input.Repo, pullLimit, pullOpenOnly, pullsSince, progress)
 					},
 					writer.WritePullRequest,
 					func(pr *github.PullRequest) int { return pr.Number },
@@ -128,17 +126,16 @@ func runPull(cmd *cobra.Command, args []string) error {
 			},
 		},
 		{
-			enabled: pullAll || pullDiscussions,
-			label:   "discussions",
+			enabled:  pullAll || pullDiscussions,
+			itemType: github.ItemTypeDiscussion,
 			run: func() error {
 				return pullAllItems(
 					cmd,
 					input.Owner,
 					input.Repo,
-					"discussions",
-					"discussion",
-					func() ([]github.Discussion, error) {
-						return client.FetchDiscussions(input.Owner, input.Repo, pullLimit, pullOpenOnly, discussionsSince)
+					github.ItemTypeDiscussion,
+					func(progress github.ProgressFunc) ([]github.Discussion, error) {
+						return client.FetchDiscussions(input.Owner, input.Repo, pullLimit, pullOpenOnly, discussionsSince, progress)
 					},
 					writer.WriteDiscussion,
 					func(d *github.Discussion) int { return d.Number },
@@ -152,7 +149,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		if err := h.run(); err != nil {
-			totalErrors = append(totalErrors, fmt.Errorf("%s: %w", h.label, err))
+			totalErrors = append(totalErrors, fmt.Errorf("%s: %w", h.itemType.DisplayPlural(), err))
 		}
 	}
 
@@ -257,32 +254,37 @@ func pullSingle[T any](
 func pullAllItems[T any](
 	cmd *cobra.Command,
 	owner, repo string,
-	fetchLabel string, // "issues", "pull requests", "discussions"
-	writeLabel string, // "issue", "PR", "discussion"
-	fetch func() ([]T, error),
+	itemType github.ItemType,
+	fetch func(github.ProgressFunc) ([]T, error),
 	write func(*T) (string, error),
 	number func(*T) int,
 ) error {
-	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s from %s/%s...", fetchLabel, owner, repo))
+	plural := itemType.DisplayPlural()
+	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s from %s/%s...", plural, owner, repo))
 	s.Start()
-	items, err := fetch()
+
+	progress := func(fetched int) {
+		s.Suffix = fmt.Sprintf(" Fetching %s from %s/%s... (%d)", plural, owner, repo, fetched)
+	}
+
+	items, err := fetch(progress)
 	s.Stop()
 	if err != nil {
 		return err
 	}
 
 	if len(items) == 0 {
-		cmd.Printf("No %s found\n", fetchLabel)
+		cmd.Printf("No %s found\n", plural)
 		return nil
 	}
 
 	for i := range items {
 		item := &items[i]
 		if _, err := write(item); err != nil {
-			return fmt.Errorf("failed to write %s #%d: %w", writeLabel, number(item), err)
+			return fmt.Errorf("failed to write %s #%d: %w", itemType.Display(), number(item), err)
 		}
 	}
 
-	cmd.Printf("Wrote %d %s\n", len(items), fetchLabel)
+	cmd.Printf("Wrote %d %s\n", len(items), plural)
 	return nil
 }
