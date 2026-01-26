@@ -52,6 +52,21 @@ func writeCommentBody(sb *strings.Builder, tagName, author, body string, created
 	fmt.Fprintf(sb, "\n<!-- /gh-md:%s -->\n\n", tagName)
 }
 
+// BaseFrontmatter contains fields common to all item types.
+type BaseFrontmatter struct {
+	ID         string    `yaml:"id"`
+	URL        string    `yaml:"url"`
+	Number     int       `yaml:"number"`
+	Owner      string    `yaml:"owner"`
+	Repo       string    `yaml:"repo"`
+	Title      string    `yaml:"title"`
+	State      string    `yaml:"state"`
+	Author     string    `yaml:"author,omitempty"`
+	Created    time.Time `yaml:"created"`
+	Updated    time.Time `yaml:"updated"`
+	LastPulled time.Time `yaml:"last_pulled"`
+}
+
 // IssueReferenceFrontmatter represents a reference to a parent or child issue in frontmatter.
 type IssueReferenceFrontmatter struct {
 	Number int    `yaml:"number"`
@@ -71,19 +86,9 @@ type SubIssuesSummaryFrontmatter struct {
 
 // IssueFrontmatter represents the YAML frontmatter for an issue.
 type IssueFrontmatter struct {
-	ID               string                       `yaml:"id"`
-	URL              string                       `yaml:"url"`
-	Number           int                          `yaml:"number"`
-	Owner            string                       `yaml:"owner"`
-	Repo             string                       `yaml:"repo"`
-	Title            string                       `yaml:"title"`
-	State            string                       `yaml:"state"`
-	Author           string                       `yaml:"author,omitempty"`
+	BaseFrontmatter  `yaml:",inline"`
 	Labels           []string                     `yaml:"labels,omitempty"`
 	Assignees        []string                     `yaml:"assignees,omitempty"`
-	Created          time.Time                    `yaml:"created"`
-	Updated          time.Time                    `yaml:"updated"`
-	LastPulled       time.Time                    `yaml:"last_pulled"`
 	Parent           *IssueReferenceFrontmatter   `yaml:"parent,omitempty"`
 	Children         []IssueReferenceFrontmatter  `yaml:"children,omitempty"`
 	SubIssuesSummary *SubIssuesSummaryFrontmatter `yaml:"sub_issues_summary,omitempty"`
@@ -91,60 +96,43 @@ type IssueFrontmatter struct {
 
 // PullRequestFrontmatter represents the YAML frontmatter for a PR.
 type PullRequestFrontmatter struct {
-	ID          string    `yaml:"id"`
-	URL         string    `yaml:"url"`
-	Number      int       `yaml:"number"`
-	Owner       string    `yaml:"owner"`
-	Repo        string    `yaml:"repo"`
-	Title       string    `yaml:"title"`
-	State       string    `yaml:"state"`
-	Author      string    `yaml:"author,omitempty"`
-	Draft       bool      `yaml:"draft,omitempty"`
-	Labels      []string  `yaml:"labels,omitempty"`
-	Assignees   []string  `yaml:"assignees,omitempty"`
-	HeadRef     string    `yaml:"head_ref"`
-	BaseRef     string    `yaml:"base_ref"`
-	MergeCommit string    `yaml:"merge_commit,omitempty"`
-	Created     time.Time `yaml:"created"`
-	Updated     time.Time `yaml:"updated"`
-	Merged      time.Time `yaml:"merged,omitempty"`
-	LastPulled  time.Time `yaml:"last_pulled"`
+	BaseFrontmatter `yaml:",inline"`
+	Draft           bool      `yaml:"draft,omitempty"`
+	Labels          []string  `yaml:"labels,omitempty"`
+	Assignees       []string  `yaml:"assignees,omitempty"`
+	Reviewers       []string  `yaml:"reviewers,omitempty"`
+	HeadRef         string    `yaml:"head_ref"`
+	BaseRef         string    `yaml:"base_ref"`
+	MergeCommit     string    `yaml:"merge_commit,omitempty"`
+	Merged          time.Time `yaml:"merged,omitempty"`
 }
 
 // DiscussionFrontmatter represents the YAML frontmatter for a discussion.
 type DiscussionFrontmatter struct {
-	ID         string    `yaml:"id"`
-	URL        string    `yaml:"url"`
-	Number     int       `yaml:"number"`
-	Owner      string    `yaml:"owner"`
-	Repo       string    `yaml:"repo"`
-	Title      string    `yaml:"title"`
-	State      string    `yaml:"state"`
-	Category   string    `yaml:"category"`
-	Author     string    `yaml:"author"`
-	AnswerID   string    `yaml:"answer_id,omitempty"`
-	Locked     bool      `yaml:"locked,omitempty"`
-	Created    time.Time `yaml:"created"`
-	Updated    time.Time `yaml:"updated"`
-	LastPulled time.Time `yaml:"last_pulled"`
+	BaseFrontmatter `yaml:",inline"`
+	Category        string `yaml:"category"`
+	AnswerID        string `yaml:"answer_id,omitempty"`
+	Locked          bool   `yaml:"locked,omitempty"`
 }
 
 // IssueToMarkdown converts an issue to markdown with YAML frontmatter.
 func IssueToMarkdown(issue *github.Issue) (string, error) {
 	fm := IssueFrontmatter{
-		ID:         issue.ID,
-		URL:        issue.URL,
-		Number:     issue.Number,
-		Owner:      issue.Owner,
-		Repo:       issue.Repo,
-		Title:      issue.Title,
-		State:      issue.State,
-		Author:     issue.Author,
-		Labels:     issue.Labels,
-		Assignees:  issue.Assignees,
-		Created:    issue.CreatedAt,
-		Updated:    issue.UpdatedAt,
-		LastPulled: time.Now().UTC(),
+		BaseFrontmatter: BaseFrontmatter{
+			ID:         issue.ID,
+			URL:        issue.URL,
+			Number:     issue.Number,
+			Owner:      issue.Owner,
+			Repo:       issue.Repo,
+			Title:      issue.Title,
+			State:      issue.State,
+			Author:     issue.Author,
+			Created:    issue.CreatedAt,
+			Updated:    issue.UpdatedAt,
+			LastPulled: time.Now().UTC(),
+		},
+		Labels:    issue.Labels,
+		Assignees: issue.Assignees,
 	}
 
 	// Convert parent issue reference
@@ -208,23 +196,26 @@ func IssueToMarkdown(issue *github.Issue) (string, error) {
 // PullRequestToMarkdown converts a PR to markdown with YAML frontmatter.
 func PullRequestToMarkdown(pr *github.PullRequest) (string, error) {
 	fm := PullRequestFrontmatter{
-		ID:          pr.ID,
-		URL:         pr.URL,
-		Number:      pr.Number,
-		Owner:       pr.Owner,
-		Repo:        pr.Repo,
-		Title:       pr.Title,
-		State:       pr.State,
-		Author:      pr.Author,
+		BaseFrontmatter: BaseFrontmatter{
+			ID:         pr.ID,
+			URL:        pr.URL,
+			Number:     pr.Number,
+			Owner:      pr.Owner,
+			Repo:       pr.Repo,
+			Title:      pr.Title,
+			State:      pr.State,
+			Author:     pr.Author,
+			Created:    pr.CreatedAt,
+			Updated:    pr.UpdatedAt,
+			LastPulled: time.Now().UTC(),
+		},
 		Draft:       pr.Draft,
 		Labels:      pr.Labels,
 		Assignees:   pr.Assignees,
+		Reviewers:   pr.Reviewers,
 		HeadRef:     pr.HeadRef,
 		BaseRef:     pr.BaseRef,
 		MergeCommit: pr.MergeCommit,
-		Created:     pr.CreatedAt,
-		Updated:     pr.UpdatedAt,
-		LastPulled:  time.Now().UTC(),
 	}
 
 	if !pr.MergedAt.IsZero() {
@@ -256,20 +247,22 @@ func PullRequestToMarkdown(pr *github.PullRequest) (string, error) {
 // DiscussionToMarkdown converts a discussion to markdown with YAML frontmatter.
 func DiscussionToMarkdown(d *github.Discussion) (string, error) {
 	fm := DiscussionFrontmatter{
-		ID:         d.ID,
-		URL:        d.URL,
-		Number:     d.Number,
-		Owner:      d.Owner,
-		Repo:       d.Repo,
-		Title:      d.Title,
-		State:      d.State,
-		Category:   d.Category,
-		Author:     d.Author,
-		AnswerID:   d.AnswerID,
-		Locked:     d.Locked,
-		Created:    d.CreatedAt,
-		Updated:    d.UpdatedAt,
-		LastPulled: time.Now().UTC(),
+		BaseFrontmatter: BaseFrontmatter{
+			ID:         d.ID,
+			URL:        d.URL,
+			Number:     d.Number,
+			Owner:      d.Owner,
+			Repo:       d.Repo,
+			Title:      d.Title,
+			State:      d.State,
+			Author:     d.Author,
+			Created:    d.CreatedAt,
+			Updated:    d.UpdatedAt,
+			LastPulled: time.Now().UTC(),
+		},
+		Category: d.Category,
+		AnswerID: d.AnswerID,
+		Locked:   d.Locked,
 	}
 
 	sb, err := buildMarkdownWithFrontmatter(fm, d.Title, d.Body)

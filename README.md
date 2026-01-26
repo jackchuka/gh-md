@@ -9,7 +9,8 @@ A GitHub CLI extension that syncs GitHub Issues, Pull Requests, and Discussions 
 
 - **Pull** GitHub data as markdown files with YAML frontmatter
 - **Push** local changes back to GitHub (title, body, state, comments)
-- **Search** local files interactively with FZF
+- **Browse** local files interactively with FZF and CEL filtering
+- **Prune** delete closed/merged items to keep your workspace clean
 - **Conflict detection** prevents overwriting newer remote changes
 - **AI-friendly** format ideal for use with coding assistants and local tools
 
@@ -21,11 +22,63 @@ gh extension install jackchuka/gh-md
 
 Requires [GitHub CLI](https://cli.github.com/) with authentication (`gh auth login`).
 
+## Quickstart
+
+```bash
+# Pull issues from a repo
+gh md pull owner/repo --issues
+
+# Browse and select a file
+gh md
+
+# Edit in your editor, then push changes
+gh md push ~/.gh-md/owner/repo/issues/123.md
+```
+
 ## Usage
+
+### Browse (default)
+
+Interactively browse local files with [FZF](https://github.com/junegunn/fzf).
+
+```bash
+# Browse all local files
+gh md
+
+# Browse within a specific repository
+gh md owner/repo
+
+# Filter by type
+gh md --issues
+gh md --prs
+gh md --discussions
+
+# Filter by status
+gh md --new          # Items updated since last pull
+gh md --assigned     # Items assigned to you
+
+# Advanced filtering with CEL expressions
+gh md --filter 'state == "open"'
+gh md --filter 'labels.exists(l, l == "bug")'
+gh md --filter 'created > now - duration("168h")'  # Last 7 days
+
+# Non-interactive list mode
+gh md --list
+```
+
+**Actions after selection:**
+
+- Open in `$EDITOR`
+- Push changes to GitHub
+- View in browser
+- Copy file path
+- Pull fresh from GitHub
+
+Requires [FZF](https://github.com/junegunn/fzf) to be installed (`brew install fzf`).
 
 ### Pull
 
-Fetch GitHub data and save as local markdown files.
+Fetch GitHub data and save as local markdown files. Uses incremental sync by default.
 
 ```bash
 # Pull all issues, PRs, and discussions from a repository
@@ -42,6 +95,12 @@ gh md pull owner/repo --discussions
 
 # Limit the number of items
 gh md pull owner/repo --issues --limit 10
+
+# Pull only open items
+gh md pull owner/repo --open-only
+
+# Force full sync (ignore last sync timestamp)
+gh md pull owner/repo --full
 
 # Pull a specific item by URL
 gh md pull https://github.com/owner/repo/issues/123
@@ -69,35 +128,20 @@ gh md push --force owner/repo/issues/123.md
 - New comments
 - Edited comments
 
-### Search
+### Prune
 
-Interactively search local files with [FZF](https://github.com/junegunn/fzf).
+Delete local files for closed issues and merged/closed PRs.
 
 ```bash
-# Search all local files
-gh md search
+# Dry-run: list files that would be deleted
+gh md prune
 
-# Search within a specific repository
-gh md search owner/repo
+# Actually delete files
+gh md prune --confirm
 
-# Filter by type
-gh md search --issues
-gh md search --prs
-gh md search --discussions
-
-# Non-interactive list mode
-gh md search --list
+# Prune only a specific repository
+gh md prune owner/repo --confirm
 ```
-
-**Actions after selection:**
-
-- Open in `$EDITOR`
-- Push changes to GitHub
-- View in browser
-- Copy file path
-- Pull fresh from GitHub
-
-Requires [FZF](https://github.com/junegunn/fzf) to be installed (`brew install fzf`).
 
 ## File Format
 

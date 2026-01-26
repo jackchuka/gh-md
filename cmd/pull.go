@@ -158,13 +158,17 @@ func runPull(cmd *cobra.Command, args []string) error {
 		if md.Sync == nil {
 			md.Sync = &meta.SyncTimestamps{}
 		}
+		// Save previous timestamps for --new flag
 		if pullAll || pullIssues {
+			md.Sync.PrevIssues = md.Sync.Issues
 			md.Sync.Issues = &syncStart
 		}
 		if pullAll || pullPRs {
+			md.Sync.PrevPulls = md.Sync.Pulls
 			md.Sync.Pulls = &syncStart
 		}
 		if pullAll || pullDiscussions {
+			md.Sync.PrevDiscussions = md.Sync.Discussions
 			md.Sync.Discussions = &syncStart
 		}
 		if err := meta.Save(input.Owner, input.Repo, md); err != nil {

@@ -1,27 +1,31 @@
 package meta
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/jackchuka/gh-md/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
-const metaFile = ".gh-md-meta.json"
+const metaFile = ".gh-md-meta.yaml"
 
 // Meta is the root structure for the metadata file.
 // It allows for future extensibility beyond sync timestamps.
 type Meta struct {
-	Sync *SyncTimestamps `json:"sync,omitempty"`
+	Sync *SyncTimestamps `yaml:"sync,omitempty"`
 }
 
 // SyncTimestamps stores the last sync timestamps for each item type.
 type SyncTimestamps struct {
-	Issues      *time.Time `json:"issues,omitempty"`
-	Pulls       *time.Time `json:"pulls,omitempty"`
-	Discussions *time.Time `json:"discussions,omitempty"`
+	Issues      *time.Time `yaml:"issues,omitempty"`
+	Pulls       *time.Time `yaml:"pulls,omitempty"`
+	Discussions *time.Time `yaml:"discussions,omitempty"`
+	// Previous timestamps for --new flag (items updated since previous sync)
+	PrevIssues      *time.Time `yaml:"prev_issues,omitempty"`
+	PrevPulls       *time.Time `yaml:"prev_pulls,omitempty"`
+	PrevDiscussions *time.Time `yaml:"prev_discussions,omitempty"`
 }
 
 // Load loads metadata for a repository.
@@ -41,7 +45,7 @@ func Load(owner, repo string) (*Meta, error) {
 	}
 
 	var meta Meta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := yaml.Unmarshal(data, &meta); err != nil {
 		return nil, err
 	}
 
@@ -61,7 +65,7 @@ func Save(owner, repo string, meta *Meta) error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(meta, "", "  ")
+	data, err := yaml.Marshal(meta)
 	if err != nil {
 		return err
 	}
