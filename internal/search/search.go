@@ -2,11 +2,8 @@ package search
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/jackchuka/gh-md/internal/config"
 	"github.com/jackchuka/gh-md/internal/parser"
 )
 
@@ -32,40 +29,12 @@ type Filters struct {
 
 // DiscoverLocalFiles walks the gh-md root directory and returns all matching items.
 func DiscoverLocalFiles(filters Filters) ([]Item, error) {
-	root, err := config.GetRootDir()
-	if err != nil {
-		return nil, err
-	}
-
 	// If no type filters are set, include all types
 	includeAll := !filters.Issues && !filters.PRs && !filters.Discussions
 
 	var items []Item
 
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil // Skip directories we can't read
-		}
-
-		// Only process .md files
-		if d.IsDir() || !strings.HasSuffix(path, ".md") {
-			return nil
-		}
-
-		// Parse the file to extract metadata
-		parsed, err := parser.ParseFile(path)
-		if err != nil {
-			return nil // Skip files that can't be parsed
-		}
-
-		// Apply repo filter
-		if filters.Repo != "" {
-			repoPath := parsed.Owner + "/" + parsed.Repo
-			if repoPath != filters.Repo {
-				return nil
-			}
-		}
-
+	err := parser.WalkParsedFiles(parser.WalkFilters{Repo: filters.Repo}, func(parsed *parser.ParsedFile) error {
 		itemType := "unknown"
 		if label, ok := parsed.ItemType.ListLabel(); ok {
 			itemType = label
@@ -95,12 +64,12 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 		}
 
 		item := Item{
-			FilePath: path,
+			FilePath: parsed.FilePath,
 			Owner:    parsed.Owner,
 			Repo:     parsed.Repo,
 			Number:   parsed.Number,
 			Type:     itemType,
-			State:    normalizeState(parsed.State),
+			State:    strings.ToLower(parsed.State),
 			Title:    parsed.Title,
 			URL:      url,
 		}
@@ -114,9 +83,4 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 	}
 
 	return items, nil
-}
-
-// normalizeState converts state to a consistent lowercase format.
-func normalizeState(state string) string {
-	return strings.ToLower(state)
 }

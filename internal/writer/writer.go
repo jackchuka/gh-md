@@ -119,6 +119,7 @@ type DiscussionFrontmatter struct {
 	Owner      string    `yaml:"owner"`
 	Repo       string    `yaml:"repo"`
 	Title      string    `yaml:"title"`
+	State      string    `yaml:"state"`
 	Category   string    `yaml:"category"`
 	Author     string    `yaml:"author"`
 	AnswerID   string    `yaml:"answer_id,omitempty"`
@@ -261,6 +262,7 @@ func DiscussionToMarkdown(d *github.Discussion) (string, error) {
 		Owner:      d.Owner,
 		Repo:       d.Repo,
 		Title:      d.Title,
+		State:      d.State,
 		Category:   d.Category,
 		Author:     d.Author,
 		AnswerID:   d.AnswerID,

@@ -112,6 +112,7 @@ type Discussion struct {
 	Repo      string              `json:"repo"`
 	Title     string              `json:"title"`
 	Body      string              `json:"body"`
+	State     string              `json:"state"`
 	Category  string              `json:"category"`
 	Author    string              `json:"author"`
 	AnswerID  string              `json:"answerId,omitempty"`

@@ -7,9 +7,9 @@ import (
 // Discussions query uses smaller limits due to GitHub's 500k node limit
 // (discussions × comments × replies must stay under 500k)
 const discussionsQuery = `
-query($owner: String!, $repo: String!, $first: Int!, $after: String) {
+query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [DiscussionState!]) {
   repository(owner: $owner, name: $repo) {
-    discussions(first: $first, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
+    discussions(first: $first, after: $after, states: $states, orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo {
         hasNextPage
         endCursor
@@ -20,6 +20,7 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String) {
         number
         title
         body
+        closed
         locked
         createdAt
         updatedAt
@@ -69,6 +70,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
       number
       title
       body
+      closed
       locked
       createdAt
       updatedAt
@@ -135,6 +137,7 @@ type DiscussionNode struct {
 	Number    int       `json:"number"`
 	Title     string    `json:"title"`
 	Body      string    `json:"body"`
+	Closed    bool      `json:"closed"`
 	Locked    bool      `json:"locked"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -191,7 +194,9 @@ func (c *Client) FetchDiscussion(owner, repo string, number int) (*Discussion, e
 }
 
 // FetchDiscussions fetches all discussions from a repository with pagination.
-func (c *Client) FetchDiscussions(owner, repo string, limit int) ([]Discussion, error) {
+// If openOnly is true, only OPEN discussions are fetched; otherwise all states are fetched.
+// If since is provided, fetching stops when encountering items older than the timestamp.
+func (c *Client) FetchDiscussions(owner, repo string, limit int, openOnly bool, since *time.Time) ([]Discussion, error) {
 	var discussions []Discussion
 	var cursor *string
 	// Smaller page size for discussions due to nested comments/replies
@@ -200,11 +205,19 @@ func (c *Client) FetchDiscussions(owner, repo string, limit int) ([]Discussion, 
 		pageSize = limit
 	}
 
+	var states []string
+	if openOnly {
+		states = []string{"OPEN"}
+	} else {
+		states = []string{"OPEN", "CLOSED"}
+	}
+
 	for {
 		vars := map[string]any{
-			"owner": owner,
-			"repo":  repo,
-			"first": pageSize,
+			"owner":  owner,
+			"repo":   repo,
+			"first":  pageSize,
+			"states": states,
 		}
 		if cursor != nil {
 			vars["after"] = *cursor
@@ -216,6 +229,10 @@ func (c *Client) FetchDiscussions(owner, repo string, limit int) ([]Discussion, 
 		}
 
 		for _, node := range resp.Repository.Discussions.Nodes {
+			// Early termination: stop if item is older than since timestamp
+			if since != nil && node.UpdatedAt.Before(*since) {
+				return discussions, nil
+			}
 			discussions = append(discussions, *nodeToDiscussion(node, owner, repo))
 			if limit > 0 && len(discussions) >= limit {
 				return discussions, nil
@@ -255,6 +272,11 @@ func nodeToDiscussion(node DiscussionNode, owner, repo string) *Discussion {
 		})
 	}
 
+	state := "open"
+	if node.Closed {
+		state = "closed"
+	}
+
 	return &Discussion{
 		ID:        node.ID,
 		URL:       node.URL,
@@ -263,6 +285,7 @@ func nodeToDiscussion(node DiscussionNode, owner, repo string) *Discussion {
 		Repo:      repo,
 		Title:     node.Title,
 		Body:      node.Body,
+		State:     state,
 		Category:  node.Category.Name,
 		Author:    node.Author.Login,
 		AnswerID:  node.Answer.ID,

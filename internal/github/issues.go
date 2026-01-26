@@ -262,7 +262,9 @@ func (c *Client) FetchIssue(owner, repo string, number int) (*Issue, error) {
 }
 
 // FetchIssues fetches all issues from a repository with pagination.
-func (c *Client) FetchIssues(owner, repo string, limit int) ([]Issue, error) {
+// If openOnly is true, only OPEN issues are fetched; otherwise all states are fetched.
+// If since is provided, fetching stops when encountering items older than the timestamp.
+func (c *Client) FetchIssues(owner, repo string, limit int, openOnly bool, since *time.Time) ([]Issue, error) {
 	var issues []Issue
 	var cursor *string
 	pageSize := 100
@@ -270,12 +272,19 @@ func (c *Client) FetchIssues(owner, repo string, limit int) ([]Issue, error) {
 		pageSize = limit
 	}
 
+	var states []string
+	if openOnly {
+		states = []string{"OPEN"}
+	} else {
+		states = []string{"OPEN", "CLOSED"}
+	}
+
 	for {
 		vars := map[string]any{
 			"owner":  owner,
 			"repo":   repo,
 			"first":  pageSize,
-			"states": []string{"OPEN", "CLOSED"},
+			"states": states,
 		}
 		if cursor != nil {
 			vars["after"] = *cursor
@@ -287,6 +296,10 @@ func (c *Client) FetchIssues(owner, repo string, limit int) ([]Issue, error) {
 		}
 
 		for _, node := range resp.Repository.Issues.Nodes {
+			// Early termination: stop if item is older than since timestamp
+			if since != nil && node.UpdatedAt.Before(*since) {
+				return issues, nil
+			}
 			issues = append(issues, *nodeToIssue(node, owner, repo))
 			if limit > 0 && len(issues) >= limit {
 				return issues, nil

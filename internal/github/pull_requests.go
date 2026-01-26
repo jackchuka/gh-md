@@ -246,7 +246,9 @@ func (c *Client) FetchPullRequest(owner, repo string, number int) (*PullRequest,
 }
 
 // FetchPullRequests fetches all PRs from a repository with pagination.
-func (c *Client) FetchPullRequests(owner, repo string, limit int) ([]PullRequest, error) {
+// If openOnly is true, only OPEN PRs are fetched; otherwise all states are fetched.
+// If since is provided, fetching stops when encountering items older than the timestamp.
+func (c *Client) FetchPullRequests(owner, repo string, limit int, openOnly bool, since *time.Time) ([]PullRequest, error) {
 	var prs []PullRequest
 	var cursor *string
 	pageSize := 25
@@ -254,12 +256,19 @@ func (c *Client) FetchPullRequests(owner, repo string, limit int) ([]PullRequest
 		pageSize = limit
 	}
 
+	var states []string
+	if openOnly {
+		states = []string{"OPEN"}
+	} else {
+		states = []string{"OPEN", "CLOSED", "MERGED"}
+	}
+
 	for {
 		vars := map[string]any{
 			"owner":  owner,
 			"repo":   repo,
 			"first":  pageSize,
-			"states": []string{"OPEN", "CLOSED", "MERGED"},
+			"states": states,
 		}
 		if cursor != nil {
 			vars["after"] = *cursor
@@ -271,6 +280,10 @@ func (c *Client) FetchPullRequests(owner, repo string, limit int) ([]PullRequest
 		}
 
 		for _, node := range resp.Repository.PullRequests.Nodes {
+			// Early termination: stop if item is older than since timestamp
+			if since != nil && node.UpdatedAt.Before(*since) {
+				return prs, nil
+			}
 			prs = append(prs, *nodeToPullRequest(node, owner, repo))
 			if limit > 0 && len(prs) >= limit {
 				return prs, nil
