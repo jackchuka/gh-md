@@ -64,6 +64,8 @@ gh md --filter 'created > now - duration("168h")'  # Last 7 days
 
 # Non-interactive list mode
 gh md --list
+gh md --list --format=json    # Output as JSON
+gh md --list --format=yaml    # Output as YAML
 ```
 
 **Actions after selection:**
@@ -104,6 +106,9 @@ gh md pull owner/repo --full
 
 # Pull a specific item by URL
 gh md pull https://github.com/owner/repo/issues/123
+
+# Pull all previously synced repositories
+gh md pull --all
 ```
 
 ### Push
@@ -141,6 +146,23 @@ gh md prune --confirm
 
 # Prune only a specific repository
 gh md prune owner/repo --confirm
+
+# Output as JSON or YAML
+gh md prune --format=json
+gh md prune --format=yaml
+```
+
+### Repos
+
+List all repositories that have been synced with gh-md.
+
+```bash
+# List all managed repositories
+gh md repos
+
+# Output as JSON or YAML
+gh md repos --format=json
+gh md repos --format=yaml
 ```
 
 ## File Format

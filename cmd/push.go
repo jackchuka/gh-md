@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/briandowns/spinner"
 	"github.com/jackchuka/gh-md/internal/github"
+	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/parser"
 	"github.com/jackchuka/gh-md/internal/writer"
 	"github.com/spf13/cobra"
@@ -52,6 +52,8 @@ type changePlan struct {
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
+	p := output.NewPrinter(cmd)
+
 	// Resolve input to file path
 	filePath, err := parser.ResolveFilePath(args[0])
 	if err != nil {
@@ -93,13 +95,13 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	if remoteState.UpdatedAt.After(parsed.Updated) {
 		if !pushForce {
-			cmd.PrintErrf("Conflict: remote has been updated since last pull\n")
-			cmd.PrintErrf("  Local:  %s\n", parsed.Updated.Format(time.RFC3339))
-			cmd.PrintErrf("  Remote: %s\n", remoteState.UpdatedAt.Format(time.RFC3339))
-			cmd.PrintErrf("\nRun 'gh md pull' first, or use --force to override\n")
+			p.Errorf("Conflict: remote has been updated since last pull\n")
+			p.Errorf("  Local:  %s\n", output.FormatTime(&parsed.Updated, output.TimestampDisplay))
+			p.Errorf("  Remote: %s\n", output.FormatTime(&remoteState.UpdatedAt, output.TimestampDisplay))
+			p.Errorf("\nRun 'gh md pull' first, or use --force to override\n")
 			return fmt.Errorf("conflict detected")
 		}
-		cmd.PrintErrf("Warning: overriding conflict (remote updated at %s)\n", remoteState.UpdatedAt.Format(time.RFC3339))
+		p.Errorf("Warning: overriding conflict (remote updated at %s)\n", output.FormatTime(&remoteState.UpdatedAt, output.TimestampDisplay))
 	}
 
 	// Build change plan
@@ -107,18 +109,18 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Dry run - show what would be pushed
 	if pushDryRun {
-		printDryRun(cmd, parsed, plan)
+		printDryRun(p, parsed, plan)
 		return nil
 	}
 
 	// Check if there are any changes
 	if !hasChanges(plan) {
-		cmd.Printf("No changes to push for %s #%d\n", parsed.ItemType, parsed.Number)
+		p.Printf("No changes to push for %s #%d\n", parsed.ItemType, parsed.Number)
 		return nil
 	}
 
 	// Execute changes
-	if err := executeChanges(cmd, client, parsed, plan, s); err != nil {
+	if err := executeChanges(p, client, parsed, plan, s); err != nil {
 		return err
 	}
 
@@ -129,8 +131,8 @@ func runPush(cmd *cobra.Command, args []string) error {
 	err = repullItem(client, parsed)
 	s.Stop()
 	if err != nil {
-		cmd.PrintErrf("Warning: failed to sync local file: %v\n", err)
-		cmd.PrintErrf("Run 'gh md pull' to sync manually\n")
+		p.Errorf("Warning: failed to sync local file: %v\n", err)
+		p.Errorf("Run 'gh md pull' to sync manually\n")
 	}
 
 	return nil
@@ -192,39 +194,39 @@ func hasChanges(plan changePlan) bool {
 		len(plan.newComments) > 0 || len(plan.editedComments) > 0
 }
 
-func printDryRun(cmd *cobra.Command, parsed *parser.ParsedFile, plan changePlan) {
-	cmd.Printf("Would push %s #%d:\n", parsed.ItemType, parsed.Number)
-	cmd.Printf("  Title: %s\n", parsed.Title)
-	cmd.Printf("  Body:  %d characters\n", len(parsed.Body))
+func printDryRun(p *output.Printer, parsed *parser.ParsedFile, plan changePlan) {
+	p.Printf("Would push %s #%d:\n", parsed.ItemType, parsed.Number)
+	p.Printf("  Title: %s\n", parsed.Title)
+	p.Printf("  Body:  %d characters\n", len(parsed.Body))
 
 	if plan.stateChange != "" {
-		cmd.Printf("  State: %s\n", plan.stateChange)
+		p.Printf("  State: %s\n", plan.stateChange)
 	}
 
 	if len(plan.newComments) > 0 {
-		cmd.Printf("  New comments: %d\n", len(plan.newComments))
+		p.Printf("  New comments: %d\n", len(plan.newComments))
 		for i, c := range plan.newComments {
 			preview := c.Body
 			if len(preview) > 50 {
 				preview = preview[:50] + "..."
 			}
 			if c.ParentID != "" {
-				cmd.Printf("    %d. (reply) %s\n", i+1, preview)
+				p.Printf("    %d. (reply) %s\n", i+1, preview)
 			} else {
-				cmd.Printf("    %d. %s\n", i+1, preview)
+				p.Printf("    %d. %s\n", i+1, preview)
 			}
 		}
 	}
 
 	if len(plan.editedComments) > 0 {
-		cmd.Printf("  Edited comments: %d\n", len(plan.editedComments))
+		p.Printf("  Edited comments: %d\n", len(plan.editedComments))
 		for i, c := range plan.editedComments {
-			cmd.Printf("    %d. %s\n", i+1, c.ID)
+			p.Printf("    %d. %s\n", i+1, c.ID)
 		}
 	}
 }
 
-func executeChanges(cmd *cobra.Command, client *github.Client, parsed *parser.ParsedFile, plan changePlan, s *spinner.Spinner) error {
+func executeChanges(p *output.Printer, client *github.Client, parsed *parser.ParsedFile, plan changePlan, s *spinner.Spinner) error {
 	// 1. Update title/body
 	s.Suffix = fmt.Sprintf(" Pushing %s #%d...", parsed.ItemType, parsed.Number)
 	s.Start()
@@ -243,7 +245,7 @@ func executeChanges(cmd *cobra.Command, client *github.Client, parsed *parser.Pa
 	if err != nil {
 		return err
 	}
-	cmd.Printf("Pushed %s #%d\n", parsed.ItemType, parsed.Number)
+	p.Printf("Pushed %s #%d\n", parsed.ItemType, parsed.Number)
 
 	// 2. Update state (issues and PRs only)
 	if plan.stateChange != "" && parsed.ItemType != github.ItemTypeDiscussion {
@@ -269,7 +271,7 @@ func executeChanges(cmd *cobra.Command, client *github.Client, parsed *parser.Pa
 		if err != nil {
 			return fmt.Errorf("failed to %s: %w", plan.stateChange, err)
 		}
-		cmd.Printf("State changed to %s\n", plan.stateChange)
+		p.Printf("State changed to %s\n", plan.stateChange)
 	}
 
 	// 3. Update existing comments
@@ -287,7 +289,7 @@ func executeChanges(cmd *cobra.Command, client *github.Client, parsed *parser.Pa
 		if err != nil {
 			return fmt.Errorf("failed to update comment %s: %w", c.ID, err)
 		}
-		cmd.Printf("Updated comment %s\n", c.ID)
+		p.Printf("Updated comment %s\n", c.ID)
 	}
 
 	// 4. Add new comments
@@ -321,7 +323,7 @@ func executeChanges(cmd *cobra.Command, client *github.Client, parsed *parser.Pa
 		if err != nil {
 			return fmt.Errorf("failed to add comment: %w", err)
 		}
-		cmd.Printf("Added new comment\n")
+		p.Printf("Added new comment\n")
 	}
 
 	return nil

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackchuka/gh-md/internal/executil"
 	"github.com/jackchuka/gh-md/internal/meta"
+	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/parser"
 	"github.com/jackchuka/gh-md/internal/search"
 	"github.com/spf13/cobra"
@@ -21,6 +22,7 @@ var (
 	rootNew         bool
 	rootAssigned    bool
 	rootList        bool
+	rootFormat      string
 )
 
 var rootCmd = &cobra.Command{
@@ -42,6 +44,7 @@ local files. Use flags to filter:
   gh md --filter 'state == "open"'   # CEL filter expression
   gh md owner/repo                   # Filter to specific repo
   gh md --list                       # Print matches without FZF
+  gh md --list --format=json         # Output as JSON for scripting
 
 CEL filter variables:
   user, now, item_type, state, title, body, author,
@@ -56,6 +59,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&rootNew, "new", false, "Show items updated since last pull")
 	rootCmd.Flags().BoolVar(&rootAssigned, "assigned", false, "Show items assigned to you")
 	rootCmd.Flags().BoolVar(&rootList, "list", false, "Print matches without interactive FZF")
+	rootCmd.Flags().StringVar(&rootFormat, "format", "text", "Output format: text, json, yaml (only with --list)")
 }
 
 func Execute() {
@@ -97,15 +101,16 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	p := output.NewPrinter(cmd).WithFormat(output.ParseFormat(rootFormat))
+
 	if len(items) == 0 {
-		cmd.Println("No items found. Run 'gh md pull' to download some first.")
+		p.Print("No items found. Run 'gh md pull' to download some first.")
 		return nil
 	}
 
 	// List mode - just print and exit
 	if rootList {
-		cmd.Print(search.FormatItemsForList(items))
-		return nil
+		return outputItems(p, items)
 	}
 
 	// Interactive FZF selection
@@ -275,6 +280,8 @@ func discoverWithFilters(repo string) ([]search.Item, error) {
 }
 
 func executeAction(cmd *cobra.Command, item *search.Item, action search.Action) error {
+	p := output.NewPrinter(cmd)
+
 	switch action {
 	case search.ActionOpenEditor:
 		return executil.OpenInEditor(item.FilePath)
@@ -289,7 +296,7 @@ func executeAction(cmd *cobra.Command, item *search.Item, action search.Action) 
 		if err := executil.CopyToClipboard(item.FilePath); err != nil {
 			return err
 		}
-		cmd.Println("Copied to clipboard")
+		p.Print("Copied to clipboard")
 		return nil
 
 	case search.ActionPullFresh:
@@ -301,4 +308,48 @@ func executeAction(cmd *cobra.Command, item *search.Item, action search.Action) 
 	default:
 		return nil
 	}
+}
+
+// itemOutput is the output structure for list items.
+type itemOutput struct {
+	Owner    string `json:"owner" yaml:"owner"`
+	Repo     string `json:"repo" yaml:"repo"`
+	Number   int    `json:"number" yaml:"number"`
+	Type     string `json:"type" yaml:"type"`
+	State    string `json:"state" yaml:"state"`
+	Title    string `json:"title" yaml:"title"`
+	URL      string `json:"url" yaml:"url"`
+	FilePath string `json:"file_path" yaml:"file_path"`
+}
+
+func outputItems(p *output.Printer, items []search.Item) error {
+	// Convert to output type
+	out := make([]itemOutput, len(items))
+	for i, item := range items {
+		out[i] = itemOutput{
+			Owner:    item.Owner,
+			Repo:     item.Repo,
+			Number:   item.Number,
+			Type:     item.Type,
+			State:    item.State,
+			Title:    item.Title,
+			URL:      item.URL,
+			FilePath: item.FilePath,
+		}
+	}
+
+	return output.List(p,
+		[]string{"REPO", "NUMBER", "TYPE", "STATE", "TITLE", "PATH"},
+		out,
+		func(item itemOutput) []string {
+			return []string{
+				fmt.Sprintf("%s/%s", item.Owner, item.Repo),
+				fmt.Sprintf("#%d", item.Number),
+				item.Type,
+				item.State,
+				item.Title,
+				item.FilePath,
+			}
+		},
+	)
 }
