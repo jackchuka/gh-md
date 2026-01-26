@@ -45,6 +45,18 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String, $states: [P
             login
           }
         }
+        reviewRequests(first: 100) {
+          nodes {
+            requestedReviewer {
+              ... on User {
+                login
+              }
+              ... on Team {
+                name
+              }
+            }
+          }
+        }
         comments(first: 50) {
           nodes {
             id
@@ -112,6 +124,18 @@ query($owner: String!, $repo: String!, $number: Int!) {
       assignees(first: 100) {
         nodes {
           login
+        }
+      }
+      reviewRequests(first: 100) {
+        nodes {
+          requestedReviewer {
+            ... on User {
+              login
+            }
+            ... on Team {
+              name
+            }
+          }
         }
       }
       comments(first: 100) {
@@ -196,6 +220,14 @@ type PullRequestNode struct {
 	Assignees struct {
 		Nodes []AssigneeNode `json:"nodes"`
 	} `json:"assignees"`
+	ReviewRequests struct {
+		Nodes []struct {
+			RequestedReviewer struct {
+				Login string `json:"login"` // User
+				Name  string `json:"name"`  // Team
+			} `json:"requestedReviewer"`
+		} `json:"nodes"`
+	} `json:"reviewRequests"`
 	Comments struct {
 		Nodes []struct {
 			ID        string    `json:"id"`
@@ -311,6 +343,16 @@ func nodeToPullRequest(node PullRequestNode, owner, repo string) *PullRequest {
 	labels := extractLabelNames(node.Labels.Nodes)
 	assignees := extractAssigneeLogins(node.Assignees.Nodes)
 
+	// Extract requested reviewers (users and teams)
+	var reviewers []string
+	for _, rr := range node.ReviewRequests.Nodes {
+		if rr.RequestedReviewer.Login != "" {
+			reviewers = append(reviewers, rr.RequestedReviewer.Login)
+		} else if rr.RequestedReviewer.Name != "" {
+			reviewers = append(reviewers, rr.RequestedReviewer.Name)
+		}
+	}
+
 	comments := make([]Comment, 0, len(node.Comments.Nodes))
 	for _, c := range node.Comments.Nodes {
 		comments = append(comments, Comment{
@@ -358,6 +400,7 @@ func nodeToPullRequest(node PullRequestNode, owner, repo string) *PullRequest {
 		Draft:         node.IsDraft,
 		Labels:        labels,
 		Assignees:     assignees,
+		Reviewers:     reviewers,
 		HeadRef:       node.HeadRefName,
 		BaseRef:       node.BaseRefName,
 		MergeCommit:   node.MergeCommit.Oid,

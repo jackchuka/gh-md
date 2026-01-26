@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cli/go-gh/v2"
+	"github.com/google/cel-go/cel"
 	"github.com/jackchuka/gh-md/internal/parser"
 )
 
@@ -75,6 +77,97 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 		}
 
 		items = append(items, item)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+// GetCurrentUser returns the current GitHub username using gh CLI.
+func GetCurrentUser() (string, error) {
+	stdout, _, err := gh.Exec("api", "user", "--jq", ".login")
+	if err != nil {
+		return "", fmt.Errorf("failed to get current user: %w (is gh CLI authenticated?)", err)
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+// DiscoverItems discovers all items matching the CEL filter.
+// If repo is empty, searches all repos. If repo is "owner/repo", only searches that repo.
+func DiscoverItems(prg cel.Program, username string, repo string) ([]Item, error) {
+	var items []Item
+
+	filters := parser.WalkFilters{Repo: repo}
+
+	err := parser.WalkParsedFiles(filters, func(parsed *parser.ParsedFile) error {
+		// Determine item type label
+		itemType := "unknown"
+		if label, ok := parsed.ItemType.ListLabel(); ok {
+			itemType = label
+		}
+
+		// Build URL
+		url := ""
+		if seg, ok := parsed.ItemType.URLSegment(); ok {
+			url = fmt.Sprintf("https://github.com/%s/%s/%s/%d", parsed.Owner, parsed.Repo, seg, parsed.Number)
+		}
+
+		// Ensure slices are not nil (CEL requires non-nil lists)
+		assigned := parsed.Assignees
+		if assigned == nil {
+			assigned = []string{}
+		}
+		reviewers := parsed.Reviewers
+		if reviewers == nil {
+			reviewers = []string{}
+		}
+		labels := parsed.Labels
+		if labels == nil {
+			labels = []string{}
+		}
+
+		// Build CEL variables map
+		vars := map[string]any{
+			"user":      username,
+			"item_type": itemType,
+			"state":     strings.ToLower(parsed.State),
+			"title":     parsed.Title,
+			"body":      parsed.Body,
+			"author":    parsed.Author,
+			"assigned":  assigned,
+			"reviewers": reviewers,
+			"labels":    labels,
+			"created":   parsed.Created,
+			"updated":   parsed.Updated,
+			"owner":     parsed.Owner,
+			"repo":      parsed.Repo,
+			"number":    parsed.Number,
+		}
+
+		// Evaluate the CEL filter
+		match, err := EvaluateFilter(prg, vars)
+		if err != nil {
+			// Skip items that fail evaluation (e.g., missing fields)
+			return nil
+		}
+
+		if match {
+			items = append(items, Item{
+				FilePath: parsed.FilePath,
+				Owner:    parsed.Owner,
+				Repo:     parsed.Repo,
+				Number:   parsed.Number,
+				Type:     itemType,
+				State:    strings.ToLower(parsed.State),
+				Title:    parsed.Title,
+				URL:      url,
+			})
+		}
+
 		return nil
 	})
 

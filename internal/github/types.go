@@ -83,6 +83,7 @@ type PullRequest struct {
 	Draft         bool           `json:"draft"`
 	Labels        []string       `json:"labels"`
 	Assignees     []string       `json:"assignees"`
+	Reviewers     []string       `json:"reviewers"`
 	HeadRef       string         `json:"headRef"`
 	BaseRef       string         `json:"baseRef"`
 	MergeCommit   string         `json:"mergeCommit,omitempty"`

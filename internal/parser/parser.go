@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackchuka/gh-md/internal/config"
 	"github.com/jackchuka/gh-md/internal/github"
+	"github.com/jackchuka/gh-md/internal/writer"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,12 +24,17 @@ type ParsedComment struct {
 // ParsedFile represents a parsed markdown file.
 type ParsedFile struct {
 	// From frontmatter
-	ID      string
-	Owner   string
-	Repo    string
-	Number  int
-	Updated time.Time // For conflict detection
-	State   string    // open/closed from frontmatter
+	ID        string
+	Owner     string
+	Repo      string
+	Number    int
+	Updated   time.Time // For conflict detection
+	State     string    // open/closed from frontmatter
+	Author    string
+	Assignees []string
+	Reviewers []string
+	Labels    []string
+	Created   time.Time
 
 	// From content
 	Title    string
@@ -42,12 +48,10 @@ type ParsedFile struct {
 
 // frontmatter represents the YAML frontmatter structure.
 type frontmatter struct {
-	ID      string    `yaml:"id"`
-	Owner   string    `yaml:"owner"`
-	Repo    string    `yaml:"repo"`
-	Number  int       `yaml:"number"`
-	Updated time.Time `yaml:"updated"`
-	State   string    `yaml:"state"`
+	writer.BaseFrontmatter `yaml:",inline"`
+	Assignees              []string `yaml:"assignees"`
+	Reviewers              []string `yaml:"reviewers"`
+	Labels                 []string `yaml:"labels"`
 }
 
 // ParseFile parses a markdown file and returns structured data.
@@ -77,21 +81,29 @@ func parseContent(content, path string) (*ParsedFile, error) {
 	itemType := detectItemType(path)
 
 	return &ParsedFile{
-		ID:       fm.ID,
-		Owner:    fm.Owner,
-		Repo:     fm.Repo,
-		Number:   fm.Number,
-		Updated:  fm.Updated,
-		State:    fm.State,
-		Title:    title,
-		Body:     body,
-		ItemType: itemType,
-		Comments: comments,
-		FilePath: path,
+		ID:        fm.ID,
+		Owner:     fm.Owner,
+		Repo:      fm.Repo,
+		Number:    fm.Number,
+		Updated:   fm.Updated,
+		State:     fm.State,
+		Author:    fm.Author,
+		Assignees: fm.Assignees,
+		Reviewers: fm.Reviewers,
+		Labels:    fm.Labels,
+		Created:   fm.Created,
+		Title:     title,
+		Body:      body,
+		ItemType:  itemType,
+		Comments:  comments,
+		FilePath:  path,
 	}, nil
 }
 
 func extractFrontmatter(content string) (*frontmatter, string, error) {
+	// Normalize CRLF to LF for consistent parsing
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+
 	// Frontmatter is between --- markers
 	if !strings.HasPrefix(content, "---\n") {
 		return nil, "", fmt.Errorf("file does not start with frontmatter")

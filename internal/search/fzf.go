@@ -60,8 +60,9 @@ func RunSelector(items []Item, query string) (*Item, error) {
 		"--delimiter", "\t",
 		"--with-nth", "2..", // Hide the filepath column from display
 		"--preview", "cat {1}", // Preview using the first field (filepath)
-		"--preview-window", "right:60%:wrap",
-		"--header", "Search gh-md files (Enter to select, Esc to cancel)",
+		"--preview-window", "right:50%:wrap:hidden", // Hidden by default
+		"--bind", "ctrl-p:toggle-preview", // Toggle with ctrl-p
+		"--header", "Search gh-md files (Enter=select, Ctrl-P=preview, Esc=cancel)",
 	}
 
 	if query != "" {
