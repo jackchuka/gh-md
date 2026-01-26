@@ -7,6 +7,7 @@ import (
 	"github.com/jackchuka/gh-md/internal/discovery"
 	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/meta"
+	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/writer"
 	"github.com/spf13/cobra"
 )
@@ -84,17 +85,19 @@ func runPull(cmd *cobra.Command, args []string) error {
 }
 
 func runPullAll(cmd *cobra.Command) error {
+	p := output.NewPrinter(cmd)
+
 	repos, err := discovery.DiscoverManagedRepos()
 	if err != nil {
 		return fmt.Errorf("failed to discover repositories: %w", err)
 	}
 
 	if len(repos) == 0 {
-		cmd.Println("No managed repositories found.")
+		p.Print("No managed repositories found.")
 		return nil
 	}
 
-	cmd.Printf("Pulling %d repositories...\n\n", len(repos))
+	p.Printf("Pulling %d repositories...\n", len(repos))
 
 	client, err := github.NewClient()
 	if err != nil {
@@ -103,15 +106,15 @@ func runPullAll(cmd *cobra.Command) error {
 
 	var errors []error
 	for i, repo := range repos {
-		cmd.Printf("[%d/%d] %s\n", i+1, len(repos), repo.Slug())
+		p.Printf("[%d/%d] %s\n", i+1, len(repos), repo.Slug())
 
 		if err := pullRepo(cmd, client, repo.Owner, repo.Repo); err != nil {
 			errors = append(errors, fmt.Errorf("%s: %w", repo.Slug(), err))
-			cmd.PrintErrf("  Error: %v\n", err)
+			p.Errorf("  Error: %v\n", err)
 		}
 	}
 
-	cmd.Printf("\nCompleted: %d/%d repositories\n", len(repos)-len(errors), len(repos))
+	p.Printf("\nCompleted: %d/%d repositories\n", len(repos)-len(errors), len(repos))
 
 	if len(errors) > 0 {
 		return fmt.Errorf("%d repositories failed to update", len(errors))
@@ -210,6 +213,8 @@ func pullRepo(cmd *cobra.Command, client *github.Client, owner, repo string) err
 		}
 	}
 
+	p := output.NewPrinter(cmd)
+
 	// Save sync timestamps on success
 	if len(totalErrors) == 0 {
 		if md.Sync == nil {
@@ -229,14 +234,14 @@ func pullRepo(cmd *cobra.Command, client *github.Client, owner, repo string) err
 			md.Sync.Discussions = &syncStart
 		}
 		if err := meta.Save(owner, repo, md); err != nil {
-			cmd.PrintErrf("Warning: failed to save sync metadata: %v\n", err)
+			p.Errorf("Warning: failed to save sync metadata: %v\n", err)
 		}
 	}
 
 	if len(totalErrors) > 0 {
-		cmd.PrintErrln("  Some errors occurred:")
+		p.Errorf("  Some errors occurred:\n")
 		for _, e := range totalErrors {
-			cmd.PrintErrf("    - %v\n", e)
+			p.Errorf("    - %v\n", e)
 		}
 		return fmt.Errorf("pull completed with %d error(s)", len(totalErrors))
 	}
@@ -297,6 +302,7 @@ func pullSingle[T any](
 	writtenLabel string,
 	number func(*T) int,
 ) error {
+	p := output.NewPrinter(cmd)
 	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s #%d...", input.ItemType, input.Number))
 	s.Start()
 	item, err := fetch()
@@ -308,7 +314,7 @@ func pullSingle[T any](
 	if err != nil {
 		return err
 	}
-	cmd.Printf("Wrote %s #%d to %s\n", writtenLabel, number(item), path)
+	p.Printf("Wrote %s #%d to %s\n", writtenLabel, number(item), path)
 	return nil
 }
 
@@ -320,6 +326,7 @@ func pullAllItems[T any](
 	write func(*T) (string, error),
 	number func(*T) int,
 ) error {
+	p := output.NewPrinter(cmd)
 	plural := itemType.DisplayPlural()
 	s := newSpinner(cmd.ErrOrStderr(), fmt.Sprintf("Fetching %s from %s/%s...", plural, owner, repo))
 	s.Start()
@@ -335,7 +342,7 @@ func pullAllItems[T any](
 	}
 
 	if len(items) == 0 {
-		cmd.Printf("No %s found\n", plural)
+		p.Printf("No %s found.\n", plural)
 		return nil
 	}
 
@@ -346,6 +353,6 @@ func pullAllItems[T any](
 		}
 	}
 
-	cmd.Printf("Wrote %d %s\n", len(items), plural)
+	p.Printf("Wrote %d %s\n", len(items), plural)
 	return nil
 }

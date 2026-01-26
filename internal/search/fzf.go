@@ -169,21 +169,3 @@ func RunActionMenu(item *Item) (Action, error) {
 
 	return ActionCancel, nil
 }
-
-// FormatItemsForList formats items for non-interactive list output.
-func FormatItemsForList(items []Item) string {
-	var out strings.Builder
-	for _, item := range items {
-		line := fmt.Sprintf("%s/%s\t#%d\t%s\t[%s]\t%s\t%s",
-			item.Owner, item.Repo,
-			item.Number,
-			item.Type,
-			item.State,
-			item.Title,
-			item.FilePath,
-		)
-		out.WriteString(line)
-		out.WriteString("\n")
-	}
-	return out.String()
-}
