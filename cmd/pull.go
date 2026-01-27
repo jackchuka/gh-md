@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackchuka/gh-md/internal/discovery"
+	"github.com/jackchuka/gh-md/internal/gitcontext"
 	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/meta"
 	"github.com/jackchuka/gh-md/internal/output"
@@ -27,11 +28,19 @@ var pullCmd = &cobra.Command{
 	Short: "Pull GitHub data to local markdown files",
 	Long: `Pull issues, PRs, and discussions from GitHub and save them as local markdown files.
 
+When run without arguments inside a git repository:
+  - On a branch with an open PR: pulls that PR with all review comments
+  - On main/master: pulls all items for the current repository
+  - On a branch without a PR: shows an error with suggestions
+
+When run with explicit arguments, pulls the specified items.
+
 By default, all items (open and closed) are fetched for accurate state tracking.
 Incremental sync is used automatically - only items updated since the last pull are fetched.
 Single-item pulls (e.g., owner/repo/issues/123) always fetch regardless of state.
 
 Examples:
+  gh md pull                           # Smart pull based on current git context
   gh md pull owner/repo
   gh md pull owner/repo --issues --limit 10
   gh md pull owner/repo --open-only
@@ -63,7 +72,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(args) == 0 {
-		return fmt.Errorf("repository argument required (or use --all to pull all managed repos)")
+		return runSmartPull(cmd)
 	}
 
 	input, err := github.ParseInput(args[0])
@@ -82,6 +91,45 @@ func runPull(cmd *cobra.Command, args []string) error {
 	}
 
 	return pullRepo(cmd, client, input.Owner, input.Repo)
+}
+
+func runSmartPull(cmd *cobra.Command) error {
+	p := output.NewPrinter(cmd)
+
+	// Detect git context
+	ctx, err := gitcontext.Detect()
+	if err != nil {
+		return fmt.Errorf("repository argument required (or use --all to pull all managed repos)\n\n%w", err)
+	}
+
+	p.Printf("Detected repository: %s/%s (branch: %s)\n", ctx.Owner, ctx.Repo, ctx.Branch)
+
+	// Resolve what to pull
+	result, err := ctx.Resolve()
+	if err != nil {
+		return err
+	}
+
+	client, err := github.NewClient()
+	if err != nil {
+		return err
+	}
+
+	if result.PRNumber > 0 {
+		// Pull specific PR with reviews
+		p.Printf("Pulling PR #%d...\n", result.PRNumber)
+		input := &github.ParsedInput{
+			Owner:    result.Owner,
+			Repo:     result.Repo,
+			Number:   result.PRNumber,
+			ItemType: github.ItemTypePullRequest,
+		}
+		return pullSingleItem(cmd, client, input)
+	}
+
+	// On default branch - pull all items for this repo
+	p.Printf("On default branch - pulling all items for %s/%s\n", result.Owner, result.Repo)
+	return pullRepo(cmd, client, result.Owner, result.Repo)
 }
 
 func runPullAll(cmd *cobra.Command) error {
