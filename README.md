@@ -7,6 +7,7 @@ A GitHub CLI extension that syncs GitHub Issues, Pull Requests, and Discussions 
 
 ## Features
 
+- **Smart context detection** - Commands auto-detect your git repo and branch
 - **Pull** GitHub data as markdown files with YAML frontmatter
 - **Push** local changes back to GitHub (title, body, state, comments)
 - **Browse** local files interactively with FZF and CEL filtering
@@ -35,14 +36,35 @@ gh md
 gh md push ~/.gh-md/owner/repo/issues/123.md
 ```
 
+## Smart Context Detection
+
+When run inside a git repository, commands automatically detect your repo and branch:
+
+| Command       | On feature branch with PR | On main/master       | Outside git repo      |
+| ------------- | ------------------------- | -------------------- | --------------------- |
+| `gh md`       | FZF pre-filtered to PR    | FZF filtered to repo | Show all items        |
+| `gh md pull`  | Pull that PR with reviews | Pull all repo items  | Requires `owner/repo` |
+| `gh md push`  | FZF filtered to repo      | FZF filtered to repo | Requires file path    |
+| `gh md prune` | Prune current repo        | Prune current repo   | Prune all repos       |
+
+```bash
+# Inside a git repo on a feature branch with an open PR:
+gh md pull    # Pulls your PR with all review comments
+gh md         # Opens FZF pre-filtered to your PR
+gh md push    # Opens FZF to select file from current repo
+gh md prune   # Prunes closed items from current repo
+```
+
 ## Usage
 
 ### Browse (default)
 
 Interactively browse local files with [FZF](https://github.com/junegunn/fzf).
 
+When run inside a git repo, FZF is pre-filtered to your current repo (or PR if on a feature branch). Clear the query to see all items.
+
 ```bash
-# Browse all local files
+# Smart: pre-filtered to current repo/PR
 gh md
 
 # Browse within a specific repository
@@ -82,7 +104,15 @@ Requires [FZF](https://github.com/junegunn/fzf) to be installed (`brew install f
 
 Fetch GitHub data and save as local markdown files. Uses incremental sync by default.
 
+When run without arguments inside a git repo:
+
+- On a feature branch with PR: pulls that PR with all review comments
+- On main/master: pulls all items for the current repository
+
 ```bash
+# Smart: pull based on git context
+gh md pull
+
 # Pull all issues, PRs, and discussions from a repository
 gh md pull owner/repo
 
@@ -115,7 +145,12 @@ gh md pull --all
 
 Push local markdown changes back to GitHub.
 
+When run without arguments inside a git repo, opens FZF to select a file from the current repo.
+
 ```bash
+# Smart: FZF selector for current repo
+gh md push
+
 # Push changes from a local file
 gh md push owner/repo/issues/123.md
 
@@ -137,14 +172,16 @@ gh md push --force owner/repo/issues/123.md
 
 Delete local files for closed issues and merged/closed PRs.
 
+When run inside a git repo, defaults to pruning only the current repository.
+
 ```bash
-# Dry-run: list files that would be deleted
+# Smart: prune current repo (dry-run)
 gh md prune
 
 # Actually delete files
 gh md prune --confirm
 
-# Prune only a specific repository
+# Prune a specific repository
 gh md prune owner/repo --confirm
 
 # Output as JSON or YAML
