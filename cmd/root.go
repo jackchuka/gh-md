@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackchuka/gh-md/internal/executil"
+	"github.com/jackchuka/gh-md/internal/gitcontext"
 	"github.com/jackchuka/gh-md/internal/meta"
 	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/parser"
@@ -113,8 +114,22 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return outputItems(p, items)
 	}
 
+	// Smart context detection - pre-filter based on git context
+	initialQuery := ""
+	if ctx, err := gitcontext.Detect(); err == nil {
+		if result, err := ctx.Resolve(); err == nil {
+			if result.PRNumber > 0 {
+				// On feature branch with PR - filter to that PR
+				initialQuery = fmt.Sprintf("%s/%s #%d", result.Owner, result.Repo, result.PRNumber)
+			} else {
+				// On default branch - filter to current repo
+				initialQuery = fmt.Sprintf("%s/%s", result.Owner, result.Repo)
+			}
+		}
+	}
+
 	// Interactive FZF selection
-	selected, err := search.RunSelector(items, "")
+	selected, err := search.RunSelector(items, initialQuery)
 	if err != nil {
 		return err
 	}
