@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	"github.com/briandowns/spinner"
+	"github.com/jackchuka/gh-md/internal/gitcontext"
 	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/parser"
+	"github.com/jackchuka/gh-md/internal/search"
 	"github.com/jackchuka/gh-md/internal/writer"
 	"github.com/spf13/cobra"
 )
@@ -18,9 +20,12 @@ var (
 )
 
 var pushCmd = &cobra.Command{
-	Use:   "push <file-path | url>",
+	Use:   "push [file-path | url]",
 	Short: "Push local changes back to GitHub",
 	Long: `Push local markdown changes back to GitHub.
+
+When run without arguments inside a git repository, opens FZF to select
+a file from the current repo to push.
 
 Supports pushing:
   - Title and body changes
@@ -29,10 +34,11 @@ Supports pushing:
   - Edited comments
 
 Examples:
+  gh md push                                      # Smart: FZF selector for current repo
   gh md push ~/.gh-md/owner/repo/issues/123.md
   gh md push https://github.com/owner/repo/issues/123
   gh md push --dry-run <file>`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runPush,
 }
 
@@ -54,10 +60,24 @@ type changePlan struct {
 func runPush(cmd *cobra.Command, args []string) error {
 	p := output.NewPrinter(cmd)
 
-	// Resolve input to file path
-	filePath, err := parser.ResolveFilePath(args[0])
-	if err != nil {
-		return err
+	var filePath string
+	var err error
+
+	if len(args) == 0 {
+		filePath, err = selectFileForPush()
+		if err != nil {
+			return err
+		}
+		if filePath == "" {
+			// User cancelled
+			return nil
+		}
+	} else {
+		// Resolve input to file path
+		filePath, err = parser.ResolveFilePath(args[0])
+		if err != nil {
+			return err
+		}
 	}
 
 	// Parse the markdown file
@@ -358,4 +378,44 @@ func repullItem(client *github.Client, parsed *parser.ParsedFile) error {
 	default:
 		return fmt.Errorf("unknown item type: %s", parsed.ItemType)
 	}
+}
+
+func selectFileForPush() (string, error) {
+	// Check for FZF
+	if err := search.CheckFZFInstalled(); err != nil {
+		return "", err
+	}
+
+	// Detect git context for repo filter
+	var repoFilter string
+	var initialQuery string
+	if ctx, err := gitcontext.Detect(); err == nil {
+		repoFilter = fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo)
+		initialQuery = repoFilter
+		if result, err := ctx.Resolve(); err == nil && result.PRNumber > 0 {
+			initialQuery = fmt.Sprintf("%s #%d", repoFilter, result.PRNumber)
+		}
+	}
+
+	// Discover files
+	items, err := search.DiscoverLocalFiles(search.Filters{Repo: repoFilter})
+	if err != nil {
+		return "", fmt.Errorf("failed to discover files: %w", err)
+	}
+
+	if len(items) == 0 {
+		return "", fmt.Errorf("no files found. Run 'gh md pull' first")
+	}
+
+	// Show FZF selector
+	selected, err := search.RunSelector(items, initialQuery)
+	if err != nil {
+		return "", err
+	}
+
+	if selected == nil {
+		return "", nil
+	}
+
+	return selected.FilePath, nil
 }

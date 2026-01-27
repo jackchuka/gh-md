@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/jackchuka/gh-md/internal/gitcontext"
 	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/prune"
 	"github.com/spf13/cobra"
@@ -69,6 +70,10 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	var repoFilter string
 	if len(args) > 0 {
 		repoFilter = args[0]
+	} else if ctx, err := gitcontext.Detect(); err == nil {
+		// Smart context: default to current repo
+		repoFilter = fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo)
+		p.Printf("Detected repository: %s\n", repoFilter)
 	}
 
 	files, err := prune.FindPrunableFiles(repoFilter)
