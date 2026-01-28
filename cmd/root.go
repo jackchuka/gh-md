@@ -129,7 +129,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	// Interactive FZF selection
-	selected, err := search.RunSelector(items, initialQuery)
+	selected, err := search.RunSelector(items, initialQuery, search.SortUpdated)
 	if err != nil {
 		return err
 	}
@@ -268,6 +268,8 @@ func discoverNewItems(cmd *cobra.Command, repo string) ([]search.Item, error) {
 			State:    strings.ToLower(parsed.State),
 			Title:    parsed.Title,
 			URL:      url,
+			Created:  parsed.Created,
+			Updated:  parsed.Updated,
 		})
 
 		return nil
