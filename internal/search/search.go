@@ -2,11 +2,22 @@ package search
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/cli/go-gh/v2"
 	"github.com/google/cel-go/cel"
 	"github.com/jackchuka/gh-md/internal/parser"
+)
+
+// SortField specifies how to sort items.
+type SortField string
+
+const (
+	SortUpdated SortField = "updated" // Latest updated first
+	SortCreated SortField = "created" // Latest created first
+	SortNumber  SortField = "number"  // Highest number first
 )
 
 // Item represents a searchable item from local files.
@@ -19,6 +30,8 @@ type Item struct {
 	State    string // "open", "closed", "merged"
 	Title    string
 	URL      string
+	Created  time.Time
+	Updated  time.Time
 }
 
 // Filters specifies which items to include in search results.
@@ -74,6 +87,8 @@ func DiscoverLocalFiles(filters Filters) ([]Item, error) {
 			State:    strings.ToLower(parsed.State),
 			Title:    parsed.Title,
 			URL:      url,
+			Created:  parsed.Created,
+			Updated:  parsed.Updated,
 		}
 
 		items = append(items, item)
@@ -165,6 +180,8 @@ func DiscoverItems(prg cel.Program, username string, repo string) ([]Item, error
 				State:    strings.ToLower(parsed.State),
 				Title:    parsed.Title,
 				URL:      url,
+				Created:  parsed.Created,
+				Updated:  parsed.Updated,
 			})
 		}
 
@@ -176,4 +193,17 @@ func DiscoverItems(prg cel.Program, username string, repo string) ([]Item, error
 	}
 
 	return items, nil
+}
+
+func sortItems(items []Item, field SortField) {
+	sort.Slice(items, func(i, j int) bool {
+		switch field {
+		case SortCreated:
+			return items[i].Created.After(items[j].Created)
+		case SortNumber:
+			return items[i].Number > items[j].Number
+		default: // SortUpdated
+			return items[i].Updated.After(items[j].Updated)
+		}
+	})
 }

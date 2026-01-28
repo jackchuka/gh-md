@@ -408,7 +408,7 @@ func selectFileForPush() (string, error) {
 	}
 
 	// Show FZF selector
-	selected, err := search.RunSelector(items, initialQuery)
+	selected, err := search.RunSelector(items, initialQuery, search.SortUpdated)
 	if err != nil {
 		return "", err
 	}

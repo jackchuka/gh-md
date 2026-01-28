@@ -31,10 +31,12 @@ func CheckFZFInstalled() error {
 
 // RunSelector opens fzf with the given items and returns the selected item.
 // Returns nil if the user cancels (Esc).
-func RunSelector(items []Item, query string) (*Item, error) {
+func RunSelector(items []Item, query string, sortBy SortField) (*Item, error) {
 	if len(items) == 0 {
 		return nil, fmt.Errorf("no items to search")
 	}
+
+	sortItems(items, sortBy)
 
 	// Build the input for fzf with file paths embedded
 	var input strings.Builder
