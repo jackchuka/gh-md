@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackchuka/gh-md/internal/executil"
 	"github.com/jackchuka/gh-md/internal/gitcontext"
+	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/meta"
 	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/parser"
@@ -27,7 +28,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "md [owner/repo]",
+	Use:   "md [repo]",
 	Short: "Search and browse local GitHub markdown files",
 	Long: `gh-md is a GitHub CLI extension that converts GitHub data
 (Issues, Discussions, Pull Requests) to local markdown files,
@@ -44,14 +45,16 @@ local files. Use flags to filter:
   gh md --issues                     # Only issues
   gh md --filter 'state == "open"'   # CEL filter expression
   gh md owner/repo                   # Filter to specific repo
+  gh md gh-md                        # Partial match (resolves to owner/repo)
   gh md --list                       # Print matches without FZF
   gh md --list --format=json         # Output as JSON for scripting
 
 CEL filter variables:
   user, now, item_type, state, title, body, author,
   assigned, reviewers, labels, created, updated, owner, repo, number`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runRoot,
+	Args:         cobra.MaximumNArgs(1),
+	SilenceUsage: true,
+	RunE:         runRoot,
 }
 
 func init() {
@@ -77,10 +80,14 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Get repo from positional argument
+	// Get repo from positional argument, with partial match support
 	var repo string
 	if len(args) > 0 {
-		repo = args[0]
+		input, err := github.ParseInput(args[0])
+		if err != nil {
+			return err
+		}
+		repo = input.FullName()
 	}
 
 	var items []search.Item
@@ -115,15 +122,18 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	// Smart context detection - pre-filter based on git context
+	// Only use git context if no repo argument was provided
 	initialQuery := ""
-	if ctx, err := gitcontext.Detect(); err == nil {
-		if result, err := ctx.Resolve(); err == nil {
-			if result.PRNumber > 0 {
-				// On feature branch with PR - filter to that PR
-				initialQuery = fmt.Sprintf("%s/%s #%d", result.Owner, result.Repo, result.PRNumber)
-			} else {
-				// On default branch - filter to current repo
-				initialQuery = fmt.Sprintf("%s/%s", result.Owner, result.Repo)
+	if repo == "" {
+		if ctx, err := gitcontext.Detect(); err == nil {
+			if result, err := ctx.Resolve(); err == nil {
+				if result.PRNumber > 0 {
+					// On feature branch with PR - filter to that PR
+					initialQuery = fmt.Sprintf("%s/%s #%d", result.Owner, result.Repo, result.PRNumber)
+				} else {
+					// On default branch - filter to current repo
+					initialQuery = fmt.Sprintf("%s/%s", result.Owner, result.Repo)
+				}
 			}
 		}
 	}

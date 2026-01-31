@@ -18,6 +18,10 @@ type Context struct {
 	Branch string
 }
 
+func (c *Context) FullName() string {
+	return fmt.Sprintf("%s/%s", c.Owner, c.Repo)
+}
+
 // Result holds the resolved action to take based on git context.
 type Result struct {
 	Owner     string

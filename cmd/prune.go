@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jackchuka/gh-md/internal/gitcontext"
+	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/output"
 	"github.com/jackchuka/gh-md/internal/prune"
 	"github.com/spf13/cobra"
@@ -15,7 +16,7 @@ var (
 )
 
 var pruneCmd = &cobra.Command{
-	Use:   "prune [owner/repo]",
+	Use:   "prune [repo]",
 	Short: "Delete local markdown files for closed/merged items",
 	Long: `Delete local markdown files for merged PRs and closed issues/PRs.
 
@@ -34,6 +35,7 @@ Examples:
   gh md prune                    # Dry-run: list files that would be deleted
   gh md prune --confirm          # Actually delete files
   gh md prune owner/repo         # Dry-run for specific repo only
+  gh md prune gh-md              # Partial match (resolves to owner/repo)
   gh md prune owner/repo --confirm
   gh md prune --format=json      # Output as JSON for scripting`,
 	Args: cobra.MaximumNArgs(1),
@@ -69,10 +71,14 @@ func runPrune(cmd *cobra.Command, args []string) error {
 
 	var repoFilter string
 	if len(args) > 0 {
-		repoFilter = args[0]
+		input, err := github.ParseInput(args[0])
+		if err != nil {
+			return err
+		}
+		repoFilter = input.FullName()
 	} else if ctx, err := gitcontext.Detect(); err == nil {
 		// Smart context: default to current repo
-		repoFilter = fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo)
+		repoFilter = ctx.FullName()
 		p.Printf("Detected repository: %s\n", repoFilter)
 	}
 

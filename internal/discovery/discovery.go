@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"sort"
@@ -107,4 +108,39 @@ func DiscoverManagedRepos() ([]ManagedRepo, error) {
 	})
 
 	return repos, nil
+}
+
+// ResolveRepoPartial attempts to match a partial input against managed repos.
+// Returns the matching repo slug ("owner/repo") if exactly one match found.
+// Returns an error with suggestions if zero or multiple matches.
+func ResolveRepoPartial(partial string) (string, error) {
+	partial = strings.TrimSpace(partial)
+	if partial == "" {
+		return "", fmt.Errorf("empty input")
+	}
+
+	repos, err := DiscoverManagedRepos()
+	if err != nil {
+		return "", err
+	}
+
+	partialLower := strings.ToLower(partial)
+	var matches []string
+
+	for _, r := range repos {
+		slug := r.Slug()
+		if strings.Contains(strings.ToLower(slug), partialLower) {
+			matches = append(matches, slug)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no repos match %q. Run \"gh md repos\" to see managed repos", partial)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("%q matches multiple repos:\n  - %s\nUse full owner/repo format to be specific",
+			partial, strings.Join(matches, "\n  - "))
+	}
 }
