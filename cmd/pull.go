@@ -24,7 +24,7 @@ var (
 )
 
 var pullCmd = &cobra.Command{
-	Use:   "pull [owner/repo | url | owner/repo/<type>/<number>]",
+	Use:   "pull [repo | url | owner/repo/<type>/<number>]",
 	Short: "Pull GitHub data to local markdown files",
 	Long: `Pull issues, PRs, and discussions from GitHub and save them as local markdown files.
 
@@ -34,6 +34,7 @@ When run without arguments inside a git repository:
   - On a branch without a PR: shows an error with suggestions
 
 When run with explicit arguments, pulls the specified items.
+Partial repo names are resolved against locally managed repos.
 
 By default, all items (open and closed) are fetched for accurate state tracking.
 Incremental sync is used automatically - only items updated since the last pull are fetched.
@@ -42,6 +43,7 @@ Single-item pulls (e.g., owner/repo/issues/123) always fetch regardless of state
 Examples:
   gh md pull                           # Smart pull based on current git context
   gh md pull owner/repo
+  gh md pull gh-md                     # Partial match (resolves to owner/repo)
   gh md pull owner/repo --issues --limit 10
   gh md pull owner/repo --open-only
   gh md pull owner/repo --full

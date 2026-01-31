@@ -1,6 +1,9 @@
 package github
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Comment represents a comment on an issue, PR, or discussion.
 type Comment struct {
@@ -165,7 +168,11 @@ type ParsedInput struct {
 	Owner    string
 	Repo     string
 	Number   int      // 0 if fetching all
-	ItemType ItemType // Empty if fetching all types
+	ItemType ItemType // wEmpty if fetching all types
+}
+
+func (pi *ParsedInput) FullName() string {
+	return fmt.Sprintf("%s/%s", pi.Owner, pi.Repo)
 }
 
 // ProgressFunc is called during paginated fetches with the current count of fetched items.

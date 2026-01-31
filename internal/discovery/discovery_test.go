@@ -215,3 +215,108 @@ func TestDiscoverManagedRepos(t *testing.T) {
 		}
 	})
 }
+
+func TestResolveRepoPartial(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv(config.EnvRootDir, root)
+
+	// Set up test repos
+	repos := []struct {
+		owner, repo string
+	}{
+		{"jackchuka", "gh-md"},
+		{"acme", "gh-md-tools"},
+		{"org", "awesome"},
+	}
+
+	for _, r := range repos {
+		repoDir := filepath.Join(root, r.owner, r.repo)
+		if err := os.MkdirAll(repoDir, 0755); err != nil {
+			t.Fatalf("MkdirAll failed: %v", err)
+		}
+		metaPath := filepath.Join(repoDir, metaFile)
+		if err := os.WriteFile(metaPath, []byte("sync: {}"), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+	}
+
+	tests := []struct {
+		name    string
+		partial string
+		want    string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "single match by repo name",
+			partial: "awesome",
+			want:    "org/awesome",
+		},
+		{
+			name:    "single match by owner name",
+			partial: "jackchuka",
+			want:    "jackchuka/gh-md",
+		},
+		{
+			name:    "case insensitive match",
+			partial: "AWESOME",
+			want:    "org/awesome",
+		},
+		{
+			name:    "multiple matches returns error",
+			partial: "gh-md",
+			wantErr: true,
+			errMsg:  "matches multiple repos",
+		},
+		{
+			name:    "no matches returns error",
+			partial: "nonexistent",
+			wantErr: true,
+			errMsg:  "no repos match",
+		},
+		{
+			name:    "empty input returns error",
+			partial: "",
+			wantErr: true,
+		},
+		{
+			name:    "whitespace trimmed",
+			partial: "  awesome  ",
+			want:    "org/awesome",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveRepoPartial(tt.partial)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ResolveRepoPartial(%q) error = %v, wantErr %v", tt.partial, err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if tt.errMsg != "" && err != nil {
+					if !contains(err.Error(), tt.errMsg) {
+						t.Errorf("error = %q, want to contain %q", err.Error(), tt.errMsg)
+					}
+				}
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ResolveRepoPartial(%q) = %q, want %q", tt.partial, got, tt.want)
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && searchSubstring(s, substr)))
+}
+
+func searchSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

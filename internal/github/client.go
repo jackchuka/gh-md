@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/jackchuka/gh-md/internal/discovery"
 )
 
 // Client provides methods to interact with GitHub's GraphQL API.
@@ -105,7 +106,22 @@ func ParseInput(input string) (*ParsedInput, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("invalid input format: %s (expected URL, owner/repo, or owner/repo/<type>/<number>)", input)
+	// Try partial match against managed repos as last resort
+	slug, partialErr := discovery.ResolveRepoPartial(input)
+	if partialErr == nil {
+		parts := strings.SplitN(slug, "/", 2)
+		return &ParsedInput{
+			Owner: parts[0],
+			Repo:  parts[1],
+		}, nil
+	}
+
+	// Return the partial match error if it's more informative (e.g., "matches multiple repos")
+	if strings.Contains(partialErr.Error(), "matches multiple repos") {
+		return nil, partialErr
+	}
+
+	return nil, fmt.Errorf("invalid input format: %s (expected URL, owner/repo, or partial match)", input)
 }
 
 func parsePathLikeInput(input string) (*ParsedInput, bool) {
