@@ -1,20 +1,37 @@
+<div align="center">
+
 # gh-md
+
+**GitHub Issues, Pull Requests, and Discussions as local Markdown files.**
+
+Pull them into plain files with YAML frontmatter, browse and edit them locally,<br>
+then push titles, bodies, state, and comments back to GitHub.
 
 [![Test](https://github.com/jackchuka/gh-md/actions/workflows/test.yml/badge.svg)](https://github.com/jackchuka/gh-md/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/jackchuka/gh-md?sort=semver)](https://github.com/jackchuka/gh-md/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A GitHub CLI extension that syncs GitHub Issues, Pull Requests, and Discussions to local markdown files with bidirectional support.
+<img src="assets/demo.gif" alt="gh md pulling issues from a repository, filtering them, and previewing a new comment with push --dry-run" width="800">
+
+[Installation](#installation) · [Quick Start](#quick-start) · [Usage](#usage) · [File Format](#file-format) · [Storage Location](#storage-location)
+
+</div>
+
+---
+
+Issues, pull requests, and discussions live behind a web UI and an API. That makes them awkward to grep, edit in your own editor, keep offline, or hand to a coding assistant as context. **gh-md** mirrors them into a directory of Markdown files, keeps that mirror in sync incrementally, and lets you push edits back without overwriting newer changes on GitHub.
 
 ## Features
 
-- **Smart context detection** - Commands auto-detect your git repo and branch
-- **Pull** GitHub data as markdown files with YAML frontmatter
-- **Push** local changes back to GitHub (title, body, state, comments)
-- **Browse** local files interactively with FZF and CEL filtering
-- **Prune** delete closed/merged items to keep your workspace clean
-- **Conflict detection** prevents overwriting newer remote changes
-- **AI-friendly** format ideal for use with coding assistants and local tools
+- **Pull** issues, PRs (with review comments), and discussions as Markdown with YAML frontmatter
+- **Push** local edits back to GitHub: title, body, open/closed state, new and edited comments
+- **Conflict detection** refuses to push over a remote that changed since your last pull (`--force` to override)
+- **Incremental sync** fetches only items updated since the last pull
+- **Browse** local files with FZF, or list them non-interactively as text, JSON, or YAML
+- **CEL filters** such as `state == "open"` or `labels.exists(l, l == "bug")`
+- **Smart context** detects the current repo and branch, so `gh md pull` on a PR branch pulls that PR
+- **Prune** removes files for closed and merged items
+- **AI-friendly** plain files that coding assistants and local tools can read directly
 
 ## Installation
 
@@ -22,24 +39,25 @@ A GitHub CLI extension that syncs GitHub Issues, Pull Requests, and Discussions 
 gh extension install jackchuka/gh-md
 ```
 
-Requires [GitHub CLI](https://cli.github.com/) with authentication (`gh auth login`).
+Requires the [GitHub CLI](https://cli.github.com/), authenticated with `gh auth login`. Interactive browsing also needs [FZF](https://github.com/junegunn/fzf) (`brew install fzf`).
 
-## Quickstart
+## Quick Start
 
 ```bash
-# Pull issues from a repo
+# Pull issues from a repository into ~/.gh-md/
 gh md pull owner/repo --issues
 
-# Browse and select a file
+# Browse local files and pick an action (edit, push, open in browser, ...)
 gh md
 
-# Edit in your editor, then push changes
-gh md push ~/.gh-md/owner/repo/issues/123.md
+# Edit a file in your editor, preview the change, then push it
+gh md push --dry-run owner/repo/issues/123.md
+gh md push owner/repo/issues/123.md
 ```
 
 ## Smart Context Detection
 
-When run inside a git repository, commands automatically detect your repo and branch:
+Inside a git repository, every command detects your repo and branch:
 
 | Command       | On feature branch with PR | On main/master       | Outside git repo      |
 | ------------- | ------------------------- | -------------------- | --------------------- |
@@ -80,12 +98,12 @@ gh md --discussions
 gh md --new          # Items updated since last pull
 gh md --assigned     # Items assigned to you
 
-# Advanced filtering with CEL expressions
+# Filter with CEL expressions
 gh md --filter 'state == "open"'
 gh md --filter 'labels.exists(l, l == "bug")'
 gh md --filter 'created > now - duration("168h")'  # Last 7 days
 
-# Non-interactive list mode
+# Non-interactive list mode (no FZF needed)
 gh md --list
 gh md --list --format=json    # Output as JSON
 gh md --list --format=yaml    # Output as YAML
@@ -99,11 +117,11 @@ gh md --list --format=yaml    # Output as YAML
 - Copy file path
 - Pull fresh from GitHub
 
-Requires [FZF](https://github.com/junegunn/fzf) to be installed (`brew install fzf`).
+CEL filter variables: `user`, `now`, `item_type`, `state`, `title`, `body`, `author`, `assigned`, `reviewers`, `labels`, `created`, `updated`, `owner`, `repo`, `number`.
 
 ### Pull
 
-Fetch GitHub data and save as local markdown files. Uses incremental sync by default.
+Fetch GitHub data and save it as local markdown files. Pulls are incremental: only items updated since the last sync are fetched. All states (open and closed) are fetched by default so local state stays accurate.
 
 When run without arguments inside a git repo:
 
@@ -135,8 +153,12 @@ gh md pull owner/repo --open-only
 # Force full sync (ignore last sync timestamp)
 gh md pull owner/repo --full
 
-# Pull a specific item by URL
+# Pull a specific item by URL or path
 gh md pull https://github.com/owner/repo/issues/123
+gh md pull owner/repo/issues/123
+
+# Partial repo names resolve against repos you already manage
+gh md pull gh-md
 
 # Pull all previously synced repositories
 gh md pull --all
@@ -171,7 +193,7 @@ gh md push --force owner/repo/issues/123.md
 
 ### Prune
 
-Delete local files for closed issues and merged/closed PRs.
+Delete local files for closed issues and discussions, and for merged or closed PRs.
 
 When run inside a git repo, defaults to pruning only the current repository.
 
@@ -283,4 +305,4 @@ export GH_MD_ROOT=/path/to/custom/directory
 
 ## License
 
-[MIT License](LICENSE)
+[MIT](LICENSE)
