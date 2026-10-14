@@ -272,7 +272,7 @@ func TestResolveRepoPartial(t *testing.T) {
 			name:    "no matches returns error",
 			partial: "nonexistent",
 			wantErr: true,
-			errMsg:  "no repos match",
+			errMsg:  "no managed repo matches",
 		},
 		{
 			name:    "empty input returns error",

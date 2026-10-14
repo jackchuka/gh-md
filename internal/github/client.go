@@ -1,6 +1,7 @@
 package github
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -116,8 +117,7 @@ func ParseInput(input string) (*ParsedInput, error) {
 		}, nil
 	}
 
-	// Return the partial match error if it's more informative (e.g., "matches multiple repos")
-	if strings.Contains(partialErr.Error(), "matches multiple repos") {
+	if errors.Is(partialErr, discovery.ErrNoPartialMatch) || strings.Contains(partialErr.Error(), "matches multiple repos") {
 		return nil, partialErr
 	}
 
