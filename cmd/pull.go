@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jackchuka/gh-md/internal/discovery"
@@ -9,6 +12,7 @@ import (
 	"github.com/jackchuka/gh-md/internal/github"
 	"github.com/jackchuka/gh-md/internal/meta"
 	"github.com/jackchuka/gh-md/internal/output"
+	"github.com/jackchuka/gh-md/internal/search"
 	"github.com/jackchuka/gh-md/internal/writer"
 	"github.com/spf13/cobra"
 )
@@ -34,7 +38,8 @@ When run without arguments inside a git repository:
   - On a branch without a PR: shows an error with suggestions
 
 When run with explicit arguments, pulls the specified items.
-Partial repo names are resolved against locally managed repos.
+A bare repo name is first matched (partially) against locally managed repos.
+If none matches, it defaults to the authenticated user's repo, like "gh repo clone".
 
 By default, all items (open and closed) are fetched for accurate state tracking.
 Incremental sync is used automatically - only items updated since the last pull are fetched.
@@ -43,7 +48,7 @@ Single-item pulls (e.g., owner/repo/issues/123) always fetch regardless of state
 Examples:
   gh md pull                           # Smart pull based on current git context
   gh md pull owner/repo
-  gh md pull gh-md                     # Partial match (resolves to owner/repo)
+  gh md pull gh-md                     # Managed repo match, else <your-login>/gh-md
   gh md pull owner/repo --issues --limit 10
   gh md pull owner/repo --open-only
   gh md pull owner/repo --full
@@ -77,7 +82,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return runSmartPull(cmd)
 	}
 
-	input, err := github.ParseInput(args[0])
+	input, err := resolvePullInput(args[0], search.GetCurrentUser)
 	if err != nil {
 		return err
 	}
@@ -405,4 +410,24 @@ func pullAllItems[T any](
 
 	p.Printf("Wrote %d %s\n", len(items), plural)
 	return nil
+}
+
+var bareRepoNamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// resolvePullInput parses a pull argument. A bare repo name that matches no
+// managed repo defaults to the authenticated user's repo, like "gh repo clone".
+func resolvePullInput(arg string, currentUser func() (string, error)) (*github.ParsedInput, error) {
+	input, err := github.ParseInput(arg)
+	if err == nil || !errors.Is(err, discovery.ErrNoPartialMatch) {
+		return input, err
+	}
+	name := strings.TrimSpace(arg)
+	if !bareRepoNamePattern.MatchString(name) {
+		return nil, err
+	}
+	owner, userErr := currentUser()
+	if userErr != nil {
+		return nil, fmt.Errorf("%w (could not default the owner to the authenticated user: %v)", err, userErr)
+	}
+	return &github.ParsedInput{Owner: owner, Repo: name}, nil
 }

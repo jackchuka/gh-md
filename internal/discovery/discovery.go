@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 )
 
 const metaFile = ".gh-md-meta.yaml"
+
+// ErrNoPartialMatch is returned when a partial name matches no managed repo.
+var ErrNoPartialMatch = errors.New("no managed repo matches")
 
 // ManagedRepo represents a discovered managed repository.
 type ManagedRepo struct {
@@ -136,7 +140,8 @@ func ResolveRepoPartial(partial string) (string, error) {
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("no repos match %q. Run \"gh md repos\" to see managed repos", partial)
+		return "", fmt.Errorf("%w %q: partial names resolve only against repos already pulled (run \"gh md repos\" to list them); use owner/repo instead",
+			ErrNoPartialMatch, partial)
 	case 1:
 		return matches[0], nil
 	default:

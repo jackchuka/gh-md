@@ -1,12 +1,14 @@
 package github
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jackchuka/gh-md/internal/config"
+	"github.com/jackchuka/gh-md/internal/discovery"
 )
 
 func TestParseInput(t *testing.T) {
@@ -233,5 +235,22 @@ func TestParseInput_PartialMatchMultiple(t *testing.T) {
 	// Should show the helpful error about multiple matches
 	if !strings.Contains(err.Error(), "matches multiple repos") {
 		t.Errorf("error = %q, want to contain 'matches multiple repos'", err.Error())
+	}
+}
+
+func TestParseInput_NoManagedReposExplainsPartialMatch(t *testing.T) {
+	t.Setenv(config.EnvRootDir, t.TempDir())
+
+	_, err := ParseInput("mdschema")
+	if err == nil {
+		t.Fatal("ParseInput(\"mdschema\") expected error with no managed repos, got nil")
+	}
+	if !errors.Is(err, discovery.ErrNoPartialMatch) {
+		t.Errorf("error = %v, want errors.Is ErrNoPartialMatch", err)
+	}
+	for _, want := range []string{"mdschema", "owner/repo", "gh md repos"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want to contain %q", err.Error(), want)
+		}
 	}
 }
