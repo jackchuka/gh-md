@@ -59,12 +59,12 @@ gh md push owner/repo/issues/123.md
 
 Inside a git repository, every command detects your repo and branch:
 
-| Command       | On feature branch with PR | On main/master       | Outside git repo      |
-| ------------- | ------------------------- | -------------------- | --------------------- |
-| `gh md`       | FZF pre-filtered to PR    | FZF filtered to repo | Show all items        |
-| `gh md pull`  | Pull that PR with reviews | Pull all repo items  | Requires `owner/repo` |
-| `gh md push`  | FZF filtered to repo      | FZF filtered to repo | Requires file path    |
-| `gh md prune` | Prune current repo        | Prune current repo   | Prune all repos       |
+| Command       | On feature branch with PR | On main/master       | Outside git repo         |
+| ------------- | ------------------------- | -------------------- | ------------------------ |
+| `gh md`       | FZF pre-filtered to PR    | FZF filtered to repo | Show all items           |
+| `gh md pull`  | Pull that PR with reviews | Pull all repo items  | Requires a repo argument |
+| `gh md push`  | FZF filtered to repo      | FZF filtered to repo | Requires file path       |
+| `gh md prune` | Prune current repo        | Prune current repo   | Prune all repos          |
 
 ```bash
 # Inside a git repo on a feature branch with an open PR:
@@ -157,7 +157,8 @@ gh md pull owner/repo --full
 gh md pull https://github.com/owner/repo/issues/123
 gh md pull owner/repo/issues/123
 
-# Partial repo names resolve against repos you already manage
+# A bare name first matches repos you already manage (partial match),
+# otherwise it defaults to your own account, like `gh repo clone`
 gh md pull gh-md
 
 # Pull all previously synced repositories
